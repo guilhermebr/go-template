@@ -1,6 +1,6 @@
 OS ?= $(shell go env GOOS)
 ARCH ?= $(shell go env GOARCH)
-PKG ?= go-template/cmd
+PKG ?= ./cmd
 TERM=xterm-256color
 CLICOLOR_FORCE=true
 RICHGO_FORCE_COLOR=1
