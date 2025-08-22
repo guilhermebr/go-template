@@ -15,8 +15,9 @@ define goBuild
 	${PKG}/$2
 endef
 
-.PHONY: compile
-compile:
+# Build all binaries (automatically generates templates and code first)
+.PHONY: build
+build: generate
 	$(call goBuild,service,"service")
 
 # ###########
@@ -53,9 +54,18 @@ install-sqlc:
 	@echo "==> Installing sqlc"
 	@go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
 
+.PHONY: install-templ
+install-templ:
+	@echo "==> Installing templ"
+	@go install github.com/a-h/templ/cmd/templ@latest
+
+.PHONY: install-swag
+install-swag:
+	@echo "==> Installing swag"
+	@go install github.com/swaggo/swag/cmd/swag@latest
 
 .PHONY: setup
-setup: install-migration install-moq install-linters install-test-fmt install-gosec install-sqlc
+setup: install-migration install-moq install-linters install-test-fmt install-gosec install-sqlc install-templ install-swag
 	@go mod tidy
 
 
@@ -63,16 +73,30 @@ setup: install-migration install-moq install-linters install-test-fmt install-go
 # Generate
 # ###########
 
-.PHONY: generate
-generate: sqlc-generate
-	@echo "==> Running go generate"
-	@go generate ./...
+# Generate templ templates from .templ files
+.PHONY: templ
+templ:
+	@echo "==> Generating templ templates"
+	@templ generate
 
+# Generate swagger documentation
+.PHONY: swagger
+swagger:
+	@echo "==> Generating swagger documentation"
+	@${GO_BIN_PATH}/swag init -g cmd/service/main.go -o docs/
+
+# Generate sqlc code
 .PHONY: sqlc-generate
 sqlc-generate:
 	@echo "==> Generating sqlc code"
-	@rm -f internal/repository/pg/gen/*.go
+	@rm -f gateways/repository/pg/gen/*.go
 	@sqlc generate
+
+# Generate all code (templ templates + swagger docs + sqlc + go generate)
+.PHONY: generate
+generate: templ swagger sqlc-generate
+	@echo "==> Running go generate"
+	@go generate ./...
 
 
 # ###########
@@ -116,13 +140,13 @@ coverage:
 .PHONY: migration/create
 migration/create:
 	@read -p "Enter migration name: " migration; \
-	${GO_BIN_PATH}/migrate create -ext sql -dir ./internal/repository/pg/migrations/ "$$migration"
+	${GO_BIN_PATH}/migrate create -ext sql -dir ./gateways/repository/pg/migrations/ "$$migration"
 
 # Drop migration.
 .PHONY: migration/drop
 migration/drop:
 	dsn="postgres://$(DATABASE_USER):$(DATABASE_PASSWORD)@$(DATABASE_HOST):5432/$(DATABASE_NAME)?sslmode=disable&search_path=public"; \
-	${GO_BIN_PATH}/migrate -source file://internal/repository/pg/migrations -database $$dsn droprepository/migrations -seq $$migration
+	${GO_BIN_PATH}/migrate -source file://gateways/repository/pg/migrations -database $$dsn drop
 
 # Execute the migrations up to the most recent one. Needs the following environment variables:
 # DATABASE_HOST: database url
@@ -132,7 +156,7 @@ migration/drop:
 .PHONY: migration/up
 migration/up:
 	dsn="postgres://$(DATABASE_USER):$(DATABASE_PASSWORD)@$(DATABASE_HOST):5432/$(DATABASE_NAME)?sslmode=disable&search_path=public"; \
-	${GO_BIN_PATH}/migrate -source file://internal/repository/pg/migrations -database $$dsn up
+	${GO_BIN_PATH}/migrate -source file://gateways/repository/pg/migrations -database $$dsn up
 
 # Rollback the migrations up to the oldest one. Needs the following environment variables:
 # DATABASE_HOST: database url
@@ -142,4 +166,4 @@ migration/up:
 .PHONY: migration/down
 migration/down:
 	dsn="postgres://$(DATABASE_USER):$(DATABASE_PASSWORD)@$(DATABASE_HOST):5432/$(DATABASE_NAME)?sslmode=disable&search_path=public"; \
-	${GO_BIN_PATH}/migrate -source file://internal/repository/pg/migrations -database $$dsn drop
+	${GO_BIN_PATH}/migrate -source file://gateways/repository/pg/migrations -database $$dsn down

@@ -5,10 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"go-template/domain/example"
+	"go-template/gateways/repository/pg"
 	"go-template/internal/api"
 	v1 "go-template/internal/api/v1"
-	"go-template/internal/config"
-	"go-template/internal/repository/pg"
 	"log/slog"
 	"net/http"
 	"runtime"
@@ -27,7 +26,7 @@ var (
 func main() {
 	ctx := context.Background()
 
-	var cfg config.Config
+	var cfg Config
 	if err := cfg.Load(""); err != nil {
 		panic(fmt.Errorf("loading config: %w", err))
 	}
@@ -68,7 +67,7 @@ func main() {
 	// Handlers V1 and their dependencies
 	// ------------------------------------------
 	apiV1 := v1.ApiHandlers{
-		ExampleUseCase: example.New(repo),
+		ExampleUseCase: example.New(repo.ExampleRepo),
 	}
 
 	router := api.Router()

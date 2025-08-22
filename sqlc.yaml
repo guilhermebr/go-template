@@ -1,13 +1,13 @@
 version: "2"
 sql:
   - engine: "postgresql"
-    queries: "internal/repository/pg"
-    schema: "internal/repository/pg/migrations"
+    queries: "gateways/repository/pg"
+    schema: "gateways/repository/pg/migrations"
     gen:
       go:
         package: "gen"
         sql_package: "pgx/v5"
-        out: "internal/repository/pg/gen"
+        out: "gateways/repository/pg/gen"
         emit_interface: true
         emit_json_tags: true
         emit_prepared_queries: true

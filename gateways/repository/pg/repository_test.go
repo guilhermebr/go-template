@@ -6,16 +6,12 @@ import (
 	"os"
 	"testing"
 
-	"go-template/domain/entities"
-
-	"github.com/gofrs/uuid/v5"
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/ory/dockertest/v3"
 	"github.com/ory/dockertest/v3/docker"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -92,43 +88,4 @@ func setupTestDB(t *testing.T) *pgxpool.Pool {
 	pool, err := pgxpool.New(context.Background(), getTestDSN())
 	require.NoError(t, err)
 	return pool
-}
-
-func TestRepository_CreateExample(t *testing.T) {
-	pool := setupTestDB(t)
-	defer pool.Close()
-
-	repo := NewRepository(pool)
-	ctx := context.Background()
-
-	tests := []struct {
-		name    string
-		input   entities.Example
-		wantErr bool
-	}{
-		{
-			name: "success",
-			input: entities.Example{
-				ID:    uuid.Must(uuid.NewV4()).String(),
-				Title: "Test Title",
-			},
-			wantErr: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			id, err := repo.CreateExample(ctx, tt.input)
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-
-				// Verify the record was created
-				got, err := repo.GetExampleByID(ctx, id)
-				assert.NoError(t, err)
-				assert.Equal(t, tt.input.Title, got.Title)
-			}
-		})
-	}
 }

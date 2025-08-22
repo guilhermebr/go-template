@@ -7,29 +7,28 @@ import (
 	"fmt"
 	"go-template/domain"
 	"go-template/domain/entities"
-	"go-template/internal/repository/pg/gen"
+	"go-template/gateways/repository/pg/gen"
 
 	"github.com/gofrs/uuid/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Repository implements a domain.ExampleRepository interface.
-type Repository struct {
+// ExampleRepository implements a domain.ExampleRepository interface.
+type ExampleRepository struct {
 	queries *gen.Queries
-	db      *pgxpool.Pool
+	db      DBTX
 }
 
-// NewRepository creates a new Repository instance.
-func NewRepository(db *pgxpool.Pool) *Repository {
-	return &Repository{
+// NewExampleRepository creates a new ExampleRepository instance.
+func NewExampleRepository(db DBTX) *ExampleRepository {
+	return &ExampleRepository{
 		queries: gen.New(db),
 		db:      db,
 	}
 }
 
 // CreateExample creates a new example in the database.
-func (r *Repository) CreateExample(ctx context.Context, input entities.Example) (string, error) {
+func (r *ExampleRepository) CreateExample(ctx context.Context, input entities.Example) (string, error) {
 	out, err := r.queries.CreateExample(ctx, input.Title, input.Content)
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -43,7 +42,7 @@ func (r *Repository) CreateExample(ctx context.Context, input entities.Example) 
 }
 
 // GetExampleByID retrieves an example by its ID.
-func (r *Repository) GetExampleByID(ctx context.Context, id string) (entities.Example, error) {
+func (r *ExampleRepository) GetExampleByID(ctx context.Context, id string) (entities.Example, error) {
 	out, err := r.queries.GetExampleByID(ctx, uuid.FromStringOrNil(id))
 	if err != nil {
 		if err == sql.ErrNoRows {
