@@ -3,6 +3,7 @@ package pg
 import (
 	"context"
 	"go-template/domain/example"
+	"go-template/domain/user"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -20,6 +21,7 @@ type DBTX interface {
 type Repository struct {
 	db          *pgxpool.Pool
 	ExampleRepo example.Repository
+	UserRepo    user.Repository
 }
 
 // NewRepository creates a new Repository instance with all sub-repositories
@@ -27,6 +29,7 @@ func NewRepository(db *pgxpool.Pool) *Repository {
 	return &Repository{
 		db:          db,
 		ExampleRepo: NewExampleRepository(db),
+		UserRepo:    NewUserRepository(db),
 	}
 }
 
@@ -35,6 +38,7 @@ func (r *Repository) WithTx(tx pgx.Tx) *Repository {
 	return &Repository{
 		db:          r.db,
 		ExampleRepo: NewExampleRepository(tx),
+		UserRepo:    NewUserRepository(tx),
 	}
 }
 

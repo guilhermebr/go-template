@@ -35,9 +35,9 @@ func TestMain(m *testing.M) {
 			"POSTGRES_PASSWORD=postgres",
 			"POSTGRES_DB=go_app_template_test",
 		},
-		ExposedPorts: []string{"5432"},
+		ExposedPorts: []string{"5432/tcp"},
 		PortBindings: map[docker.Port][]docker.PortBinding{
-			"5432": {{HostIP: "localhost", HostPort: "5432"}},
+			"5432/tcp": {{HostIP: "localhost", HostPort: ""}},
 		},
 	}
 
@@ -52,6 +52,7 @@ func TestMain(m *testing.M) {
 		if err != nil {
 			return err
 		}
+		defer conn.Close()
 		return conn.Ping(context.Background())
 	}); err != nil {
 		panic(fmt.Sprintf("Could not connect to docker: %s", err))
@@ -87,5 +88,6 @@ func getTestDSN() string {
 func setupTestDB(t *testing.T) *pgxpool.Pool {
 	pool, err := pgxpool.New(context.Background(), getTestDSN())
 	require.NoError(t, err)
+	t.Cleanup(func() { pool.Close() })
 	return pool
 }

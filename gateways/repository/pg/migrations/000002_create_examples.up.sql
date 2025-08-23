@@ -1,5 +1,3 @@
-BEGIN TRANSACTION;
-
 CREATE TABLE IF NOT EXISTS examples (
     "id" UUID NOT NULL PRIMARY KEY DEFAULT gen_random_uuid(),
     "title" TEXT NOT NULL UNIQUE,
@@ -7,5 +5,3 @@ CREATE TABLE IF NOT EXISTS examples (
     "created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     "updated_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
-COMMIT;

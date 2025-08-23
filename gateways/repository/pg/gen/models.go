@@ -5,10 +5,55 @@
 package gen
 
 import (
+	"database/sql/driver"
+	"fmt"
 	"time"
 
 	uuid "github.com/gofrs/uuid/v5"
 )
+
+type AccountType string
+
+const (
+	AccountTypeUser       AccountType = "user"
+	AccountTypeAdmin      AccountType = "admin"
+	AccountTypeSuperadmin AccountType = "superadmin"
+)
+
+func (e *AccountType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = AccountType(s)
+	case string:
+		*e = AccountType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for AccountType: %T", src)
+	}
+	return nil
+}
+
+type NullAccountType struct {
+	AccountType AccountType `json:"accountType"`
+	Valid       bool        `json:"valid"` // Valid is true if AccountType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullAccountType) Scan(value interface{}) error {
+	if value == nil {
+		ns.AccountType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.AccountType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullAccountType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.AccountType), nil
+}
 
 type Example struct {
 	ID        uuid.UUID `json:"id"`
@@ -16,4 +61,14 @@ type Example struct {
 	Content   string    `json:"content"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+type User struct {
+	ID             uuid.UUID   `json:"id"`
+	Email          string      `json:"email"`
+	AuthProvider   string      `json:"authProvider"`
+	AuthProviderID *string     `json:"authProviderId"`
+	AccountType    AccountType `json:"accountType"`
+	CreatedAt      *time.Time  `json:"createdAt"`
+	UpdatedAt      *time.Time  `json:"updatedAt"`
 }

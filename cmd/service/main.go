@@ -4,10 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"go-template/domain/auth"
 	"go-template/domain/example"
+	"go-template/domain/user"
 	"go-template/gateways/repository/pg"
 	"go-template/internal/api"
+	"go-template/internal/api/middleware"
 	v1 "go-template/internal/api/v1"
+	"go-template/internal/jwt"
 	"log/slog"
 	"net/http"
 	"runtime"
@@ -64,12 +68,32 @@ func main() {
 	}
 	repo := pg.NewRepository(conn)
 
+	authProvider, err := auth.NewAuthProvider(auth.AuthConfig{
+		Provider: cfg.AuthProvider,
+		Supabase: auth.SupabaseConfig{
+			URL:    cfg.SupabaseURL,
+			APIKey: cfg.SupabaseAPIKey,
+		},
+	})
+	if err != nil {
+		log.Error("failed to setup auth provider",
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	jwtService := jwt.NewService(cfg.AuthSecretKey, cfg.AuthProvider, cfg.AuthTokenTTL)
+	userUC := user.NewUseCase(repo.UserRepo, authProvider, jwtService)
+	authMiddleware := middleware.NewAuthMiddleware(jwtService)
+	exampleUC := example.New(repo.ExampleRepo)
+
 	// Handlers V1 and their dependencies
 	// ------------------------------------------
 	apiV1 := v1.ApiHandlers{
-		ExampleUseCase: example.New(repo.ExampleRepo),
+		ExampleUseCase: exampleUC,
+		UserUC:         userUC,
+		AuthMiddleware: authMiddleware,
 	}
-
 	router := api.Router()
 	apiV1.Routes(router)
 

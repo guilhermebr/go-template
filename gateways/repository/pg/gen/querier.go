@@ -12,7 +12,13 @@ import (
 
 type Querier interface {
 	CreateExample(ctx context.Context, title string, content string) (uuid.UUID, error)
+	CreateUser(ctx context.Context, arg CreateUserParams) error
+	DeleteUser(ctx context.Context, id uuid.UUID) error
 	GetExampleByID(ctx context.Context, id uuid.UUID) (Example, error)
+	GetUserByAuthProviderID(ctx context.Context, authProvider string, authProviderID *string) (User, error)
+	GetUserByEmail(ctx context.Context, email string) (User, error)
+	GetUserByID(ctx context.Context, id uuid.UUID) (User, error)
+	UpdateUser(ctx context.Context, arg UpdateUserParams) error
 }
 
 var _ Querier = (*Queries)(nil)

@@ -12,7 +12,7 @@ sql:
         emit_json_tags: true
         emit_prepared_queries: true
         json_tags_case_style: "camel"
-        query_parameter_limit: 32
+        query_parameter_limit: 4
         overrides:
 
           - db_type: "pg_catalog.numeric"
