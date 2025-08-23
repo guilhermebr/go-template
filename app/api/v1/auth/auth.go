@@ -1,37 +1,13 @@
-package v1
+package auth
 
 import (
-	"go-template/domain/user"
-	"go-template/internal/api/middleware"
+	"go-template/app/api/middleware"
+	"go-template/domain/auth"
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
-	"github.com/go-playground/validator/v10"
 	"github.com/gofrs/uuid/v5"
 )
-
-type AuthHandler struct {
-	userUC    *user.UseCase
-	validator *validator.Validate
-}
-
-func NewAuthHandler(userUC *user.UseCase) *AuthHandler {
-	return &AuthHandler{
-		userUC:    userUC,
-		validator: validator.New(),
-	}
-}
-
-func (h *AuthHandler) Routes() chi.Router {
-	r := chi.NewRouter()
-
-	r.Post("/register", h.Register)
-	r.Post("/login", h.Login)
-	r.Get("/me", h.GetMe)
-
-	return r
-}
 
 // Register godoc
 // @Summary      Register a new user
@@ -39,14 +15,14 @@ func (h *AuthHandler) Routes() chi.Router {
 // @Tags         auth
 // @Accept       json
 // @Produce      json
-// @Param        request body user.RegisterRequest true "Registration request"
-// @Success      201 {object} user.AuthResponse
+// @Param        request body auth.RegisterRequest true "Registration request"
+// @Success      201 {object} auth.AuthResponse
 // @Failure      400 {object} map[string]string
 // @Failure      409 {object} map[string]string
 // @Failure      500 {object} map[string]string
 // @Router       /api/v1/auth/register [post]
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
-	var req user.RegisterRequest
+	var req auth.RegisterRequest
 	if err := render.DecodeJSON(r.Body, &req); err != nil {
 		render.Status(r, http.StatusBadRequest)
 		render.JSON(w, r, map[string]string{
@@ -63,7 +39,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response, err := h.userUC.Register(r.Context(), req)
+	response, err := h.authUC.Register(r.Context(), req)
 	if err != nil {
 		// Check for duplicate key error
 		if err.Error() == "duplicate key" {
@@ -91,14 +67,14 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 // @Tags         auth
 // @Accept       json
 // @Produce      json
-// @Param        request body user.LoginRequest true "Login request"
-// @Success      200 {object} user.AuthResponse
+// @Param        request body auth.LoginRequest true "Login request"
+// @Success      200 {object} auth.AuthResponse
 // @Failure      400 {object} map[string]string
 // @Failure      401 {object} map[string]string
 // @Failure      500 {object} map[string]string
 // @Router       /api/v1/auth/login [post]
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
-	var req user.LoginRequest
+	var req auth.LoginRequest
 	if err := render.DecodeJSON(r.Body, &req); err != nil {
 		render.Status(r, http.StatusBadRequest)
 		render.JSON(w, r, map[string]string{
@@ -115,7 +91,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response, err := h.userUC.Login(r.Context(), req)
+	response, err := h.authUC.Login(r.Context(), req)
 	if err != nil {
 		render.Status(r, http.StatusUnauthorized)
 		render.JSON(w, r, map[string]string{

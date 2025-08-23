@@ -9,8 +9,9 @@ import (
 )
 
 type Claims struct {
-	UserID string `json:"user_id"`
-	Email  string `json:"email"`
+	UserID      string `json:"user_id"`
+	Email       string `json:"email"`
+	AccountType string `json:"account_type"`
 	jwt.RegisteredClaims
 }
 
@@ -32,10 +33,11 @@ func NewService(secretKey, issuer string, expiry string) Service {
 	}
 }
 
-func (s Service) GenerateToken(userID, email string) (string, error) {
+func (s Service) GenerateToken(userID, email, accountType string) (string, error) {
 	claims := &Claims{
-		UserID: userID,
-		Email:  email,
+		UserID:      userID,
+		Email:       email,
+		AccountType: accountType,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(s.expiry)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -86,5 +88,5 @@ func (s Service) RefreshToken(tokenString string) (string, error) {
 	}
 
 	// Generate new token
-	return s.GenerateToken(claims.UserID, claims.Email)
+	return s.GenerateToken(claims.UserID, claims.Email, claims.AccountType)
 }

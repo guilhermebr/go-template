@@ -9,11 +9,11 @@ import (
 	"sync"
 )
 
-// ExampleUseCaseMock is a mock implementation of v1.ExampleUseCase.
+// ExampleUseCaseMock is a mock implementation of example.ExampleUseCase.
 //
 //	func TestSomethingThatUsesExampleUseCase(t *testing.T) {
 //
-//		// make and configure a mocked v1.ExampleUseCase
+//		// make and configure a mocked example.ExampleUseCase
 //		mockedExampleUseCase := &ExampleUseCaseMock{
 //			CreateExampleFunc: func(ctx context.Context, example entities.Example) (string, error) {
 //				panic("mock out the CreateExample method")
@@ -23,7 +23,7 @@ import (
 //			},
 //		}
 //
-//		// use mockedExampleUseCase in code that requires v1.ExampleUseCase
+//		// use mockedExampleUseCase in code that requires example.ExampleUseCase
 //		// and then make assertions.
 //
 //	}

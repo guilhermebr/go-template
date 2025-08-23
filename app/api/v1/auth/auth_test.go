@@ -1,16 +1,15 @@
-package v1
+package auth
 
 import (
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	apiMiddleware "go-template/app/api/middleware"
+	"go-template/app/api/v1/auth/mocks"
 	"go-template/domain"
-	mauth "go-template/domain/auth/mocks"
+	"go-template/domain/auth"
 	"go-template/domain/entities"
-	"go-template/domain/user"
-	muser "go-template/domain/user/mocks"
-	apiMiddleware "go-template/internal/api/middleware"
 	"go-template/internal/jwt"
 	"net/http"
 	"net/http/httptest"
@@ -19,18 +18,24 @@ import (
 	"github.com/gofrs/uuid/v5"
 )
 
-func newJWT() jwt.Service { return jwt.NewService("secret", "test", "1h") }
-
 func TestAuthHandler_Register_Success(t *testing.T) {
-	repo := &muser.RepositoryMock{CreateFunc: func(ctx context.Context, u entities.User) error { return nil }}
-	provider := &mauth.ProviderMock{
-		RegisterUserFunc: func(ctx context.Context, email string, password string) (string, error) { return "prov-123", nil },
-		ProviderFunc:     func() string { return "supabase" },
+	uc := &mocks.AuthUseCaseMock{
+		RegisterFunc: func(ctx context.Context, req auth.RegisterRequest) (auth.AuthResponse, error) {
+			return auth.AuthResponse{
+				Token: "token",
+				User:  entities.User{Email: "a@b.com"},
+			}, nil
+		},
+		LoginFunc: func(ctx context.Context, req auth.LoginRequest) (auth.AuthResponse, error) {
+			return auth.AuthResponse{
+				Token: "token",
+				User:  entities.User{Email: "a@b.com"},
+			}, nil
+		},
 	}
-	uc := user.NewUseCase(repo, provider, newJWT())
-	h := NewAuthHandler(uc)
+	h := NewAuthHandler(uc, nil)
 
-	body, _ := json.Marshal(user.RegisterRequest{Email: "a@b.com", Password: "123456"})
+	body, _ := json.Marshal(auth.RegisterRequest{Email: "a@b.com", Password: "123456"})
 	req := httptest.NewRequest(http.MethodPost, "/register", bytes.NewBuffer(body))
 	w := httptest.NewRecorder()
 
@@ -39,7 +44,7 @@ func TestAuthHandler_Register_Success(t *testing.T) {
 	if w.Code != http.StatusCreated {
 		t.Fatalf("expected 201, got %d", w.Code)
 	}
-	var resp user.AuthResponse
+	var resp auth.AuthResponse
 	_ = json.Unmarshal(w.Body.Bytes(), &resp)
 	if resp.Token == "" || resp.User.Email != "a@b.com" {
 		t.Fatalf("unexpected response: %+v", resp)
@@ -47,8 +52,15 @@ func TestAuthHandler_Register_Success(t *testing.T) {
 }
 
 func TestAuthHandler_Register_InvalidJSON(t *testing.T) {
-	uc := user.NewUseCase(&muser.RepositoryMock{}, &mauth.ProviderMock{}, newJWT())
-	h := NewAuthHandler(uc)
+	uc := &mocks.AuthUseCaseMock{
+		RegisterFunc: func(ctx context.Context, req auth.RegisterRequest) (auth.AuthResponse, error) {
+			return auth.AuthResponse{
+				Token: "token",
+				User:  entities.User{Email: "a@b.com"},
+			}, nil
+		},
+	}
+	h := NewAuthHandler(uc, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/register", bytes.NewBufferString("{"))
 	w := httptest.NewRecorder()
@@ -59,8 +71,15 @@ func TestAuthHandler_Register_InvalidJSON(t *testing.T) {
 }
 
 func TestAuthHandler_Register_ValidationFailed(t *testing.T) {
-	uc := user.NewUseCase(&muser.RepositoryMock{}, &mauth.ProviderMock{}, newJWT())
-	h := NewAuthHandler(uc)
+	uc := &mocks.AuthUseCaseMock{
+		RegisterFunc: func(ctx context.Context, req auth.RegisterRequest) (auth.AuthResponse, error) {
+			return auth.AuthResponse{
+				Token: "token",
+				User:  entities.User{Email: "a@b.com"},
+			}, nil
+		},
+	}
+	h := NewAuthHandler(uc, nil)
 
 	body, _ := json.Marshal(map[string]string{"email": "not-an-email"})
 	req := httptest.NewRequest(http.MethodPost, "/register", bytes.NewBuffer(body))
@@ -72,13 +91,17 @@ func TestAuthHandler_Register_ValidationFailed(t *testing.T) {
 }
 
 func TestAuthHandler_Login_Success(t *testing.T) {
-	existing := entities.User{ID: uuid.Must(uuid.NewV4()), Email: "a@b.com", AuthProvider: "supabase", AuthProviderID: "id"}
-	repo := &muser.RepositoryMock{GetByEmailFunc: func(ctx context.Context, email string) (entities.User, error) { return existing, nil }}
-	provider := &mauth.ProviderMock{LoginFunc: func(ctx context.Context, email string, password string) (string, error) { return "prov-123", nil }, ProviderFunc: func() string { return "supabase" }}
-	uc := user.NewUseCase(repo, provider, newJWT())
-	h := NewAuthHandler(uc)
+	uc := &mocks.AuthUseCaseMock{
+		LoginFunc: func(ctx context.Context, req auth.LoginRequest) (auth.AuthResponse, error) {
+			return auth.AuthResponse{
+				Token: "token",
+				User:  entities.User{Email: "a@b.com"},
+			}, nil
+		},
+	}
+	h := NewAuthHandler(uc, nil)
 
-	body, _ := json.Marshal(user.LoginRequest{Email: existing.Email, Password: "pwd"})
+	body, _ := json.Marshal(auth.LoginRequest{Email: "a@b.com", Password: "pwd"})
 	req := httptest.NewRequest(http.MethodPost, "/login", bytes.NewBuffer(body))
 	w := httptest.NewRecorder()
 	h.Login(w, req)
@@ -88,13 +111,14 @@ func TestAuthHandler_Login_Success(t *testing.T) {
 }
 
 func TestAuthHandler_Login_AuthFailed(t *testing.T) {
-	provider := &mauth.ProviderMock{LoginFunc: func(ctx context.Context, email string, password string) (string, error) {
-		return "", errors.New("auth")
-	}}
-	uc := user.NewUseCase(&muser.RepositoryMock{}, provider, newJWT())
-	h := NewAuthHandler(uc)
+	uc := &mocks.AuthUseCaseMock{
+		LoginFunc: func(ctx context.Context, req auth.LoginRequest) (auth.AuthResponse, error) {
+			return auth.AuthResponse{}, errors.New("auth")
+		},
+	}
+	h := NewAuthHandler(uc, nil)
 
-	body, _ := json.Marshal(user.LoginRequest{Email: "a@b.com", Password: "pwd"})
+	body, _ := json.Marshal(auth.LoginRequest{Email: "a@b.com", Password: "pwd"})
 	req := httptest.NewRequest(http.MethodPost, "/login", bytes.NewBuffer(body))
 	w := httptest.NewRecorder()
 	h.Login(w, req)
@@ -104,13 +128,15 @@ func TestAuthHandler_Login_AuthFailed(t *testing.T) {
 }
 
 func TestAuthHandler_GetMe_Success(t *testing.T) {
-	u := entities.User{ID: uuid.Must(uuid.NewV4()), Email: "me@example.com"}
-	repo := &muser.RepositoryMock{GetByIDFunc: func(ctx context.Context, id uuid.UUID) (entities.User, error) { return u, nil }}
-	uc := user.NewUseCase(repo, &mauth.ProviderMock{}, newJWT())
-	h := NewAuthHandler(uc)
+	uc := &mocks.UserUseCaseMock{
+		GetMeFunc: func(ctx context.Context, userID uuid.UUID) (entities.User, error) {
+			return entities.User{Email: "a@b.com"}, nil
+		},
+	}
+	h := NewAuthHandler(nil, uc)
 
 	req := httptest.NewRequest(http.MethodGet, "/me", nil)
-	claims := &jwt.Claims{UserID: u.ID.String(), Email: u.Email}
+	claims := &jwt.Claims{UserID: "123", Email: "a@b.com"}
 	ctx := context.WithValue(req.Context(), apiMiddleware.UserContextKey, claims)
 	req = req.WithContext(ctx)
 	w := httptest.NewRecorder()
@@ -121,8 +147,12 @@ func TestAuthHandler_GetMe_Success(t *testing.T) {
 }
 
 func TestAuthHandler_GetMe_Unauthorized(t *testing.T) {
-	uc := user.NewUseCase(&muser.RepositoryMock{}, &mauth.ProviderMock{}, newJWT())
-	h := NewAuthHandler(uc)
+	uc := &mocks.UserUseCaseMock{
+		GetMeFunc: func(ctx context.Context, userID uuid.UUID) (entities.User, error) {
+			return entities.User{}, errors.New("auth")
+		},
+	}
+	h := NewAuthHandler(nil, uc)
 	req := httptest.NewRequest(http.MethodGet, "/me", nil)
 	w := httptest.NewRecorder()
 	h.GetMe(w, req)
@@ -132,10 +162,12 @@ func TestAuthHandler_GetMe_Unauthorized(t *testing.T) {
 }
 
 func TestAuthHandler_GetMe_NotFound(t *testing.T) {
-	uc := user.NewUseCase(&muser.RepositoryMock{GetByIDFunc: func(ctx context.Context, id uuid.UUID) (entities.User, error) {
-		return entities.User{}, domain.ErrNotFound
-	}}, &mauth.ProviderMock{}, newJWT())
-	h := NewAuthHandler(uc)
+	uc := &mocks.UserUseCaseMock{
+		GetMeFunc: func(ctx context.Context, userID uuid.UUID) (entities.User, error) {
+			return entities.User{}, domain.ErrNotFound
+		},
+	}
+	h := NewAuthHandler(nil, uc)
 	userID := uuid.Must(uuid.NewV4())
 	req := httptest.NewRequest(http.MethodGet, "/me", nil)
 	claims := &jwt.Claims{UserID: userID.String(), Email: "x@y.com"}

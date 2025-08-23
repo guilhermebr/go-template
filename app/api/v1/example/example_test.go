@@ -1,12 +1,12 @@
-package v1
+package example
 
 import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"go-template/app/api/v1/example/mocks"
 	"go-template/domain"
 	"go-template/domain/entities"
-	"go-template/internal/api/v1/mocks"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -22,8 +22,8 @@ func TestCreateExample(t *testing.T) {
 			},
 		}
 
-		h := &ApiHandlers{
-			ExampleUseCase: mockUC,
+		h := &ExampleHandler{
+			uc: mockUC,
 		}
 
 		reqBody := CreateExampleRequest{
@@ -49,8 +49,8 @@ func TestCreateExample(t *testing.T) {
 	})
 
 	t.Run("missing title", func(t *testing.T) {
-		h := &ApiHandlers{
-			ExampleUseCase: &mocks.ExampleUseCaseMock{},
+		h := &ExampleHandler{
+			uc: &mocks.ExampleUseCaseMock{},
 		}
 
 		reqBody := CreateExampleRequest{
@@ -75,8 +75,8 @@ func TestCreateExample(t *testing.T) {
 			},
 		}
 
-		h := &ApiHandlers{
-			ExampleUseCase: mockUC,
+		h := &ExampleHandler{
+			uc: mockUC,
 		}
 
 		reqBody := CreateExampleRequest{
@@ -108,8 +108,8 @@ func TestGetExampleByID(t *testing.T) {
 			},
 		}
 
-		h := &ApiHandlers{
-			ExampleUseCase: mockUC,
+		h := &ExampleHandler{
+			uc: mockUC,
 		}
 
 		req := httptest.NewRequest(http.MethodGet, "/examples/123", nil)
@@ -134,8 +134,8 @@ func TestGetExampleByID(t *testing.T) {
 	})
 
 	t.Run("missing id", func(t *testing.T) {
-		h := &ApiHandlers{
-			ExampleUseCase: &mocks.ExampleUseCaseMock{},
+		h := &ExampleHandler{
+			uc: &mocks.ExampleUseCaseMock{},
 		}
 
 		req := httptest.NewRequest(http.MethodGet, "/examples/", nil)
@@ -160,8 +160,8 @@ func TestGetExampleByID(t *testing.T) {
 			},
 		}
 
-		h := &ApiHandlers{
-			ExampleUseCase: mockUC,
+		h := &ExampleHandler{
+			uc: mockUC,
 		}
 
 		req := httptest.NewRequest(http.MethodGet, "/examples/999", nil)

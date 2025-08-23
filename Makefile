@@ -11,7 +11,7 @@ GO_BIN_PATH=$(shell go env GOPATH)/bin
 define goBuild
 	@echo "==> Go Building $2"
 	@env GOOS=${OS} GOARCH=${ARCH} go build -v -o  build/$1 \
-	-ldflags "-X main.BuildGitCommit=$(GIT_COMMIT) -X main.BuildTime=$(GIT_BUILD_TIME)" \
+	-ldflags "-X main.BuildCommit=$(GIT_COMMIT) -X main.BuildTime=$(GIT_BUILD_TIME)" \
 	${PKG}/$2
 endef
 
@@ -19,6 +19,7 @@ endef
 .PHONY: build
 build: generate
 	$(call goBuild,service,"service")
+	$(call goBuild,admin,"admin")
 
 # ###########
 # Setup

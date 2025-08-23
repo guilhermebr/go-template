@@ -4,13 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"go-template/app/api"
+	"go-template/app/api/middleware"
+	v1 "go-template/app/api/v1"
 	"go-template/domain/auth"
 	"go-template/domain/example"
 	"go-template/domain/user"
 	"go-template/gateways/repository/pg"
-	"go-template/internal/api"
-	"go-template/internal/api/middleware"
-	v1 "go-template/internal/api/v1"
 	"go-template/internal/jwt"
 	"log/slog"
 	"net/http"
@@ -83,7 +83,8 @@ func main() {
 	}
 
 	jwtService := jwt.NewService(cfg.AuthSecretKey, cfg.AuthProvider, cfg.AuthTokenTTL)
-	userUC := user.NewUseCase(repo.UserRepo, authProvider, jwtService)
+	userUC := user.NewUseCase(repo.UserRepo)
+	authUC := auth.NewUseCase(repo.UserRepo, authProvider, jwtService)
 	authMiddleware := middleware.NewAuthMiddleware(jwtService)
 	exampleUC := example.New(repo.ExampleRepo)
 
@@ -91,8 +92,10 @@ func main() {
 	// ------------------------------------------
 	apiV1 := v1.ApiHandlers{
 		ExampleUseCase: exampleUC,
-		UserUC:         userUC,
+		AuthUseCase:    authUC,
+		UserUseCase:    userUC,
 		AuthMiddleware: authMiddleware,
+		JWTService:     jwtService,
 	}
 	router := api.Router()
 	apiV1.Routes(router)

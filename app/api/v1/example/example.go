@@ -1,9 +1,9 @@
-package v1
+package example
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
+	"go-template/app/api/common"
 	"go-template/domain"
 	"go-template/domain/entities"
 	"log/slog"
@@ -22,12 +22,6 @@ type CreateExampleResponse struct {
 	ID string `json:"id"`
 }
 
-//go:generate moq -skip-ensure -stub -pkg mocks -out mocks/example_uc.go . ExampleUseCase
-type ExampleUseCase interface {
-	CreateExample(ctx context.Context, example entities.Example) (string, error)
-	GetExampleByID(ctx context.Context, id string) (entities.Example, error)
-}
-
 // CreateExample godoc
 // @Summary Create a new example
 // @Description Create a new example with the given title and content
@@ -35,7 +29,7 @@ type ExampleUseCase interface {
 // @Accept json
 // @Produce json
 // @Param example body CreateExampleRequest true "Example to create"
-func (h *ApiHandlers) CreateExample(w http.ResponseWriter, r *http.Request) {
+func (h *ExampleHandler) CreateExample(w http.ResponseWriter, r *http.Request) {
 	var input CreateExampleRequest
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -43,7 +37,7 @@ func (h *ApiHandlers) CreateExample(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if input.Title == "" {
-		errorResponse(w, r, http.StatusBadRequest, errors.New("title is required"))
+		common.ErrorResponse(w, r, http.StatusBadRequest, errors.New("title is required"))
 		return
 	}
 
@@ -52,21 +46,21 @@ func (h *ApiHandlers) CreateExample(w http.ResponseWriter, r *http.Request) {
 		Content: input.Content,
 	}
 
-	id, err := h.ExampleUseCase.CreateExample(r.Context(), example)
+	id, err := h.uc.CreateExample(r.Context(), example)
 	if err != nil {
 		slog.Error("failed to create example", "error", err, "input", input)
 		switch {
 		case errors.Is(err, domain.ErrMalformedParameters):
-			errorResponse(w, r, http.StatusBadRequest, err)
+			common.ErrorResponse(w, r, http.StatusBadRequest, err)
 			return
 		case errors.Is(err, domain.ErrConflict):
-			errorResponse(w, r, http.StatusConflict, err)
+			common.ErrorResponse(w, r, http.StatusConflict, err)
 			return
 		case errors.Is(err, domain.ErrDuplicateKey):
-			errorResponse(w, r, http.StatusConflict, err)
+			common.ErrorResponse(w, r, http.StatusConflict, err)
 			return
 		default:
-			unknownErrorResponse(w, r)
+			common.UnknownErrorResponse(w, r)
 			return
 		}
 	}
@@ -83,31 +77,31 @@ func (h *ApiHandlers) CreateExample(w http.ResponseWriter, r *http.Request) {
 // @Accept json
 // @Produce json
 // @Param id path string true "Example ID"
-func (h *ApiHandlers) GetExampleByID(w http.ResponseWriter, r *http.Request) {
+func (h *ExampleHandler) GetExampleByID(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
-		errorResponse(w, r, http.StatusBadRequest, errors.New("id is required"))
+		common.ErrorResponse(w, r, http.StatusBadRequest, errors.New("id is required"))
 		return
 	}
 
-	example, err := h.ExampleUseCase.GetExampleByID(r.Context(), id)
+	example, err := h.uc.GetExampleByID(r.Context(), id)
 	if err != nil {
 		slog.Error("failed to get example", "error", err, "id", id)
 		switch {
 		case errors.Is(err, domain.ErrNotFound):
-			errorResponse(w, r, http.StatusNotFound, errors.New("example not found"))
+			common.ErrorResponse(w, r, http.StatusNotFound, errors.New("example not found"))
 			return
 		case errors.Is(err, domain.ErrMalformedParameters):
-			errorResponse(w, r, http.StatusBadRequest, err)
+			common.ErrorResponse(w, r, http.StatusBadRequest, err)
 			return
 		default:
-			unknownErrorResponse(w, r)
+			common.UnknownErrorResponse(w, r)
 			return
 		}
 	}
 
 	if example.ID == "" {
-		errorResponse(w, r, http.StatusNotFound, errors.New("example not found"))
+		common.ErrorResponse(w, r, http.StatusNotFound, errors.New("example not found"))
 		return
 	}
 
