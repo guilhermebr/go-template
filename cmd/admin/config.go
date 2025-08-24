@@ -10,8 +10,8 @@ import (
 
 type Config struct {
 	Environment    string `conf:"env:ENVIRONMENT,default:development"`
-	AdminAddress   string `conf:"env:ADMIN_ADDRESS,default:0.0.0.0:8001"`
-	ServiceBaseURL string `conf:"env:SERVICE_BASE_URL,default:http://localhost:8000"`
+	AdminAddress   string `conf:"env:ADMIN_ADDRESS,default:0.0.0.0:8080"`
+	ServiceBaseURL string `conf:"env:SERVICE_BASE_URL,default:http://localhost:3000"`
 	AuthSecretKey  string `conf:"env:AUTH_SECRET_KEY,default:dev-secret-change-me"`
 	AuthTokenTTL   string `conf:"env:AUTH_TOKEN_TTL,default:24h"`
 	AuthProvider   string `conf:"env:AUTH_PROVIDER,default:supabase"`

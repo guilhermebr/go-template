@@ -19,6 +19,7 @@
 tmp/ 
 build/
 bin/
+service
 
 # Go workspace file
 go.work

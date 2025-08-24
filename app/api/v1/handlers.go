@@ -31,14 +31,15 @@ func (h *ApiHandlers) Routes(r chi.Router) {
 		authHandler := auth.NewAuthHandler(h.AuthUseCase, h.UserUseCase)
 		r.Mount("/auth", authHandler.Routes())
 
-		// Admin routes (protected)
-		adminHandler := admin.NewAdminHandler(h.AuthUseCase, h.UserUseCase, h.JWTService, h.AuthMiddleware)
-		r.Mount("/admin", adminHandler.Routes())
-
 		// Example routes (protected)
 		exampleHandler := example.NewExampleHandler(h.ExampleUseCase, h.AuthMiddleware)
 		r.Mount("/example", exampleHandler.Routes())
 	})
+
+	// Admin routes (protected)
+	adminHandler := admin.NewAdminHandler(h.AuthUseCase, h.UserUseCase, h.JWTService, h.AuthMiddleware)
+	r.Mount("/admin/v1", adminHandler.Routes())
+
 }
 
 func (h *ApiHandlers) Health(w http.ResponseWriter, r *http.Request) {

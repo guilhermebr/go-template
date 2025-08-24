@@ -5,6 +5,7 @@ import (
 	"go-template/app/api/middleware"
 	"go-template/domain/entities"
 	"go-template/internal/jwt"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -79,30 +80,32 @@ func (h *Handlers) LoginPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
-	var req LoginRequest
-	if err := render.DecodeJSON(r.Body, &req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
+	if err := r.ParseForm(); err != nil {
+		slog.Error("Failed to parse login form", "error", err)
 		component := templates.LoginError("Invalid request format")
 		component.Render(r.Context(), w)
 		return
 	}
 
-	if err := h.validator.Struct(req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		component := templates.LoginError("Please provide valid email and password")
+	email := r.FormValue("email")
+	password := r.FormValue("password")
+
+	if email == "" || password == "" {
+		component := templates.LoginError("Email and password are required")
 		component.Render(r.Context(), w)
 		return
 	}
 
 	// Authenticate user using admin API
 	authResp, err := h.client.Login(r.Context(), LoginRequest{
-		Email:    req.Email,
-		Password: req.Password,
+		Email:    email,
+		Password: password,
 	})
 	if err != nil {
 		w.WriteHeader(http.StatusUnauthorized)
 		component := templates.LoginError("Invalid credentials")
 		component.Render(r.Context(), w)
+		slog.Error("error authenticating user", "error", err)
 		return
 	}
 

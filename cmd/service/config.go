@@ -11,7 +11,7 @@ import (
 type Config struct {
 	Environment    string `conf:"env:ENVIRONMENT,default:development"`
 	DatabaseEngine string `conf:"env:DATABASE_ENGINE,default:postgres"`
-	ApiAddress     string `conf:"env:API_ADDRESS,default:0.0.0.0:8000"`
+	ApiAddress     string `conf:"env:API_ADDRESS,default:0.0.0.0:3000"`
 	AuthSecretKey  string `conf:"env:AUTH_SECRET_KEY,default:dev-secret-change-me"`
 	AuthTokenTTL   string `conf:"env:AUTH_TOKEN_TTL,default:24h"`
 	AuthProvider   string `conf:"env:AUTH_PROVIDER,default:supabase"`

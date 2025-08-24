@@ -58,6 +58,7 @@ func (uc *UseCase) Register(ctx context.Context, req RegisterRequest) (AuthRespo
 		Email:          req.Email,
 		AuthProvider:   uc.authProvider.Provider(),
 		AuthProviderID: authProviderID,
+		AccountType:    entities.AccountTypeUser,
 		CreatedAt:      now,
 		UpdatedAt:      now,
 	}

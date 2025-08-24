@@ -4,6 +4,7 @@ import (
 	"go-template/app/api/middleware"
 	"go-template/domain/auth"
 	"go-template/domain/entities"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
@@ -48,6 +49,7 @@ type UpdateUserRequest struct {
 
 // AdminLogin handles admin login with privilege validation
 func (h *AdminHandler) AdminLogin(w http.ResponseWriter, r *http.Request) {
+	slog.Error("AdminLogin")
 	var req AdminLoginRequest
 	if err := render.DecodeJSON(r.Body, &req); err != nil {
 		render.Status(r, http.StatusBadRequest)
