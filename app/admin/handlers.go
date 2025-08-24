@@ -102,7 +102,6 @@ func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 		Password: password,
 	})
 	if err != nil {
-		w.WriteHeader(http.StatusUnauthorized)
 		component := templates.LoginError("Invalid credentials")
 		component.Render(r.Context(), w)
 		slog.Error("error authenticating user", "error", err)
