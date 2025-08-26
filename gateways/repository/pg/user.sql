@@ -24,4 +24,25 @@ WHERE id = $1;
 
 -- name: DeleteUser :exec
 DELETE FROM users
-WHERE id = $1;  
+WHERE id = $1;
+
+-- name: ListUsers :many
+SELECT id, email, auth_provider, auth_provider_id, account_type, created_at, updated_at
+FROM users
+ORDER BY created_at DESC
+LIMIT $1 OFFSET $2;
+
+-- name: CountUsers :one
+SELECT COUNT(*) FROM users;
+
+-- name: CountUsersByAccountType :one
+SELECT COUNT(*) FROM users WHERE account_type = $1;
+
+-- name: GetUserStats :one
+SELECT 
+    COUNT(*) as total_users,
+    COUNT(CASE WHEN account_type = 'admin' THEN 1 END) as admin_users,
+    COUNT(CASE WHEN account_type = 'super_admin' THEN 1 END) as super_admin_users,
+    COUNT(CASE WHEN account_type = 'user' THEN 1 END) as regular_users,
+    COUNT(CASE WHEN created_at >= NOW() - INTERVAL '7 days' THEN 1 END) as recent_signups
+FROM users;  

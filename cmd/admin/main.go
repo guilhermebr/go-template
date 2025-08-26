@@ -1,13 +1,16 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"go-template/app/admin"
-	"go-template/internal/jwt"
 	"log/slog"
 	"net/http"
+	"os"
+	"os/signal"
 	"runtime"
+	"syscall"
 	"time"
 
 	"github.com/guilhermebr/gox/logger"
@@ -21,7 +24,7 @@ var (
 
 func main() {
 	var cfg Config
-	if err := cfg.Load(""); err != nil {
+	if err := cfg.Load("ADMIN"); err != nil {
 		panic(fmt.Errorf("loading config: %w", err))
 	}
 
@@ -32,41 +35,63 @@ func main() {
 	}
 
 	log = log.With(
-		slog.String("app", "admin"),
 		slog.String("environment", cfg.Environment),
+		slog.String("app", "admin"),
+	)
+
+	mainlog := log.With(
 		slog.String("build_commit", BuildCommit),
 		slog.String("build_time", BuildTime),
 		slog.Int("go_max_procs", runtime.GOMAXPROCS(0)),
 		slog.Int("runtime_num_cpu", runtime.NumCPU()),
 	)
 
-	// Services (only JWT for token validation in middleware)
-	jwtService := jwt.NewService(cfg.AuthSecretKey, cfg.AuthProvider, cfg.AuthTokenTTL)
+	// Create admin client
+	apiClient := admin.NewClient(cfg.ApiBaseURL)
 
-	// Admin Handlers (connects to service API)
-	adminHandlers := admin.NewHandlers(cfg.ServiceBaseURL, jwtService)
-	router := admin.Router()
-	router.Mount("/admin", adminHandlers.Routes())
+	// Create admin handlers (use cookie-based auth)
+	adminHandlers := admin.NewHandlers(apiClient, cfg.SessionMaxAge, log)
 
-	// Health check
-	router.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Admin Panel OK"))
-	})
+	// Create router
+	router := admin.NewRouter(adminHandlers, cfg.StaticPath)
 
-	// SERVER
+	// Create server
 	server := http.Server{
 		Handler:           router,
-		Addr:              cfg.AdminAddress,
+		Addr:              cfg.Address,
 		ReadHeaderTimeout: 60 * time.Second,
 	}
-	log.Info("admin server started",
-		slog.String("address", server.Addr),
-	)
-
-	if serverErr := server.ListenAndServe(); serverErr != nil && !errors.Is(serverErr, http.ErrServerClosed) {
-		log.Error("failed to listen and serve admin server",
-			slog.String("error", serverErr.Error()),
+	// Start server
+	go func() {
+		mainlog.Info("admin server started",
+			slog.String("address", server.Addr),
 		)
+
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			mainlog.Error("failed to listen and serve admin server",
+				slog.String("error", err.Error()),
+			)
+			os.Exit(1)
+		}
+	}()
+
+	// Wait for interrupt signal
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	mainlog.Info("shutting down admin server")
+
+	// Graceful shutdown
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	if err := server.Shutdown(ctx); err != nil {
+		mainlog.Error("failed to shutdown admin server gracefully",
+			slog.String("error", err.Error()),
+		)
+		os.Exit(1)
 	}
+
+	mainlog.Info("admin server stopped")
 }

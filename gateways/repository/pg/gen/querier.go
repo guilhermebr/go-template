@@ -11,14 +11,23 @@ import (
 )
 
 type Querier interface {
+	BulkUpsertAdminSettings(ctx context.Context, column1 []string, column2 [][]byte) error
+	CountUsers(ctx context.Context) (int64, error)
+	CountUsersByAccountType(ctx context.Context, accountType AccountType) (int64, error)
 	CreateExample(ctx context.Context, title string, content string) (uuid.UUID, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) error
+	DeleteAdminSetting(ctx context.Context, key string) error
 	DeleteUser(ctx context.Context, id uuid.UUID) error
+	GetAdminSetting(ctx context.Context, key string) (AdminSetting, error)
+	GetAllAdminSettings(ctx context.Context) ([]AdminSetting, error)
 	GetExampleByID(ctx context.Context, id uuid.UUID) (Example, error)
 	GetUserByAuthProviderID(ctx context.Context, authProvider string, authProviderID *string) (User, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (User, error)
+	GetUserStats(ctx context.Context) (GetUserStatsRow, error)
+	ListUsers(ctx context.Context, limit int32, offset int32) ([]User, error)
 	UpdateUser(ctx context.Context, arg UpdateUserParams) error
+	UpsertAdminSetting(ctx context.Context, key string, value []byte) error
 }
 
 var _ Querier = (*Queries)(nil)

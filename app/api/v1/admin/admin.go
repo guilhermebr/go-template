@@ -4,7 +4,6 @@ import (
 	"go-template/app/api/middleware"
 	"go-template/domain/auth"
 	"go-template/domain/entities"
-	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
@@ -42,6 +41,13 @@ type UserListResponse struct {
 	TotalPages int             `json:"total_pages"`
 }
 
+type CreateUserRequest struct {
+	Email        string               `json:"email" validate:"required,email"`
+	Password     string               `json:"password" validate:"required,min=8"`
+	AccountType  entities.AccountType `json:"account_type" validate:"required"`
+	AuthProvider string               `json:"auth_provider" validate:"required"`
+}
+
 type UpdateUserRequest struct {
 	Email       string               `json:"email" validate:"email"`
 	AccountType entities.AccountType `json:"account_type" validate:"required"`
@@ -49,7 +55,6 @@ type UpdateUserRequest struct {
 
 // AdminLogin handles admin login with privilege validation
 func (h *AdminHandler) AdminLogin(w http.ResponseWriter, r *http.Request) {
-	slog.Error("AdminLogin")
 	var req AdminLoginRequest
 	if err := render.DecodeJSON(r.Body, &req); err != nil {
 		render.Status(r, http.StatusBadRequest)
@@ -112,8 +117,6 @@ func (h *AdminHandler) AdminLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AdminHandler) AdminLogout(w http.ResponseWriter, r *http.Request) {
-	// For now, logout is client-side (remove token from cookies/localStorage)
-	// In the future, we could implement token blacklisting
 	render.Status(r, http.StatusOK)
 	render.JSON(w, r, map[string]string{
 		"message": "logged out successfully",
@@ -121,12 +124,43 @@ func (h *AdminHandler) AdminLogout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AdminHandler) VerifyAdminToken(w http.ResponseWriter, r *http.Request) {
-	// This endpoint is protected by middleware, so if we reach here, token is valid
-	claims, ok := middleware.GetUserFromContext(r.Context())
-	if !ok {
+	// Extract token from Authorization header
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		render.Status(r, http.StatusUnauthorized)
+		render.JSON(w, r, map[string]string{
+			"error": "missing authorization header",
+		})
+		return
+	}
+
+	// Expected format: "Bearer <token>"
+	if len(authHeader) < 7 || authHeader[:7] != "Bearer " {
+		render.Status(r, http.StatusUnauthorized)
+		render.JSON(w, r, map[string]string{
+			"error": "invalid authorization header format",
+		})
+		return
+	}
+
+	token := authHeader[7:] // Remove "Bearer " prefix
+
+	// Validate token using JWT service
+	claims, err := h.jwtService.ValidateToken(token)
+	if err != nil {
 		render.Status(r, http.StatusUnauthorized)
 		render.JSON(w, r, map[string]string{
 			"error": "invalid token",
+		})
+		return
+	}
+
+	// Check if user has admin privileges
+	accountType := entities.AccountType(claims.AccountType)
+	if accountType != entities.AccountTypeAdmin && accountType != entities.AccountTypeSuperAdmin {
+		render.Status(r, http.StatusForbidden)
+		render.JSON(w, r, map[string]string{
+			"error": "insufficient privileges",
 		})
 		return
 	}
@@ -142,17 +176,55 @@ func (h *AdminHandler) VerifyAdminToken(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *AdminHandler) GetDashboardStats(w http.ResponseWriter, r *http.Request) {
-	// TODO: Implement actual stats retrieval from database
-	// For now, return mock data
+	userStats, err := h.userUC.GetUserStats(r.Context())
+	if err != nil {
+		render.Status(r, http.StatusInternalServerError)
+		render.JSON(w, r, map[string]string{
+			"error": "failed to get user stats",
+		})
+		return
+	}
+
 	stats := DashboardStatsResponse{
-		TotalUsers:     0, // TODO: Count from user repository
-		AdminUsers:     0, // TODO: Count admin users
-		ActiveSessions: 0, // TODO: Count active sessions
-		SystemAlerts:   0, // TODO: Count system alerts
+		TotalUsers:     userStats.TotalUsers,
+		AdminUsers:     userStats.AdminUsers + userStats.SuperAdminUsers,
+		ActiveSessions: 0, // TODO: Implement session tracking
+		SystemAlerts:   0, // TODO: Implement system alerts
 	}
 
 	render.Status(r, http.StatusOK)
 	render.JSON(w, r, stats)
+}
+
+func (h *AdminHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
+	var req CreateUserRequest
+	if err := render.DecodeJSON(r.Body, &req); err != nil {
+		render.Status(r, http.StatusBadRequest)
+		render.JSON(w, r, map[string]string{
+			"error": "invalid request body",
+		})
+		return
+	}
+
+	if err := h.validator.Struct(req); err != nil {
+		render.Status(r, http.StatusBadRequest)
+		render.JSON(w, r, map[string]string{
+			"error": "validation failed: " + err.Error(),
+		})
+		return
+	}
+
+	user, err := h.userUC.CreateUser(r.Context(), req.Email, req.Password, req.AuthProvider, req.AccountType)
+	if err != nil {
+		render.Status(r, http.StatusInternalServerError)
+		render.JSON(w, r, map[string]string{
+			"error": "failed to create user",
+		})
+		return
+	}
+
+	render.Status(r, http.StatusCreated)
+	render.JSON(w, r, user)
 }
 
 func (h *AdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
@@ -172,14 +244,37 @@ func (h *AdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// TODO: Implement user listing from repository with pagination
-	// For now, return empty list
+	// Parse search and filter parameters
+	search := r.URL.Query().Get("search")
+	accountType := r.URL.Query().Get("account_type")
+
+	var users []entities.User
+	var total int64
+	var err error
+
+	// Use search if provided, otherwise regular listing
+	if search != "" || accountType != "" {
+		users, total, err = h.userUC.SearchUsers(r.Context(), page, pageSize, search, accountType)
+	} else {
+		users, total, err = h.userUC.ListUsers(r.Context(), page, pageSize)
+	}
+
+	if err != nil {
+		render.Status(r, http.StatusInternalServerError)
+		render.JSON(w, r, map[string]string{
+			"error": "failed to list users",
+		})
+		return
+	}
+
+	totalPages := int((total + int64(pageSize) - 1) / int64(pageSize))
+
 	response := UserListResponse{
-		Users:      []entities.User{},
-		Total:      0,
+		Users:      users,
+		Total:      total,
 		Page:       page,
 		PageSize:   pageSize,
-		TotalPages: 0,
+		TotalPages: totalPages,
 	}
 
 	render.Status(r, http.StatusOK)
@@ -255,14 +350,13 @@ func (h *AdminHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	user.AccountType = req.AccountType
 	user.UpdatedAt = time.Now()
 
-	// TODO: Implement user update in repository
-	// if err := h.userUC.UpdateUser(r.Context(), user); err != nil {
-	//     render.Status(r, http.StatusInternalServerError)
-	//     render.JSON(w, r, map[string]string{
-	//         "error": "failed to update user",
-	//     })
-	//     return
-	// }
+	if err := h.userUC.UpdateUser(r.Context(), user); err != nil {
+		render.Status(r, http.StatusInternalServerError)
+		render.JSON(w, r, map[string]string{
+			"error": "failed to update user",
+		})
+		return
+	}
 
 	render.Status(r, http.StatusOK)
 	render.JSON(w, r, user)
@@ -289,14 +383,13 @@ func (h *AdminHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: Implement user deletion in repository
-	// if err := h.userUC.DeleteUser(r.Context(), userID); err != nil {
-	//     render.Status(r, http.StatusInternalServerError)
-	//     render.JSON(w, r, map[string]string{
-	//         "error": "failed to delete user",
-	//     })
-	//     return
-	// }
+	if err := h.userUC.DeleteUser(r.Context(), userID); err != nil {
+		render.Status(r, http.StatusInternalServerError)
+		render.JSON(w, r, map[string]string{
+			"error": "failed to delete user",
+		})
+		return
+	}
 
 	render.Status(r, http.StatusOK)
 	render.JSON(w, r, map[string]string{
@@ -305,13 +398,21 @@ func (h *AdminHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AdminHandler) GetUserStats(w http.ResponseWriter, r *http.Request) {
-	// TODO: Implement user statistics
+	userStats, err := h.userUC.GetUserStats(r.Context())
+	if err != nil {
+		render.Status(r, http.StatusInternalServerError)
+		render.JSON(w, r, map[string]string{
+			"error": "failed to get user stats",
+		})
+		return
+	}
+
 	stats := map[string]interface{}{
-		"total_users":      0,
-		"admin_users":      0,
-		"superadmin_users": 0,
-		"regular_users":    0,
-		"recent_signups":   0,
+		"total_users":      userStats.TotalUsers,
+		"admin_users":      userStats.AdminUsers,
+		"superadmin_users": userStats.SuperAdminUsers,
+		"regular_users":    userStats.RegularUsers,
+		"recent_signups":   userStats.RecentSignups,
 	}
 
 	render.Status(r, http.StatusOK)
@@ -319,11 +420,13 @@ func (h *AdminHandler) GetUserStats(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AdminHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
-	// TODO: Implement system settings retrieval
-	settings := map[string]interface{}{
-		"maintenance_mode":     false,
-		"registration_enabled": true,
-		"email_notifications":  true,
+	settings, err := h.settingsUC.GetSettings(r.Context())
+	if err != nil {
+		render.Status(r, http.StatusInternalServerError)
+		render.JSON(w, r, map[string]string{
+			"error": "failed to get settings",
+		})
+		return
 	}
 
 	render.Status(r, http.StatusOK)
@@ -331,8 +434,8 @@ func (h *AdminHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AdminHandler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
-	var settings map[string]interface{}
-	if err := render.DecodeJSON(r.Body, &settings); err != nil {
+	var settingsRequest entities.SystemSettings
+	if err := render.DecodeJSON(r.Body, &settingsRequest); err != nil {
 		render.Status(r, http.StatusBadRequest)
 		render.JSON(w, r, map[string]string{
 			"error": "invalid request body",
@@ -340,12 +443,35 @@ func (h *AdminHandler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: Implement system settings update
-	// For now, just return the received settings
+	if err := h.settingsUC.UpdateSettings(r.Context(), &settingsRequest); err != nil {
+		render.Status(r, http.StatusInternalServerError)
+		render.JSON(w, r, map[string]string{
+			"error": "failed to update settings",
+		})
+		return
+	}
 
 	render.Status(r, http.StatusOK)
-	render.JSON(w, r, map[string]interface{}{
-		"message":  "settings updated successfully",
-		"settings": settings,
+	render.JSON(w, r, map[string]string{
+		"message": "settings updated successfully",
 	})
+}
+
+func (h *AdminHandler) GetAvailableAuthProviders(w http.ResponseWriter, r *http.Request) {
+	settings, err := h.settingsUC.GetSettings(r.Context())
+	if err != nil {
+		render.Status(r, http.StatusInternalServerError)
+		render.JSON(w, r, map[string]string{
+			"error": "failed to get settings",
+		})
+		return
+	}
+
+	response := map[string]any{
+		"available_providers": settings.AvailableAuthProviders,
+		"default_provider":   settings.DefaultAuthProvider,
+	}
+
+	render.Status(r, http.StatusOK)
+	render.JSON(w, r, response)
 }

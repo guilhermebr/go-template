@@ -12,6 +12,28 @@ import (
 	uuid "github.com/gofrs/uuid/v5"
 )
 
+const countUsers = `-- name: CountUsers :one
+SELECT COUNT(*) FROM users
+`
+
+func (q *Queries) CountUsers(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countUsers)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countUsersByAccountType = `-- name: CountUsersByAccountType :one
+SELECT COUNT(*) FROM users WHERE account_type = $1
+`
+
+func (q *Queries) CountUsersByAccountType(ctx context.Context, accountType AccountType) (int64, error) {
+	row := q.db.QueryRow(ctx, countUsersByAccountType, accountType)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createUser = `-- name: CreateUser :exec
 INSERT INTO users (id, email, auth_provider, auth_provider_id, account_type, created_at, updated_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -111,6 +133,72 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const getUserStats = `-- name: GetUserStats :one
+SELECT 
+    COUNT(*) as total_users,
+    COUNT(CASE WHEN account_type = 'admin' THEN 1 END) as admin_users,
+    COUNT(CASE WHEN account_type = 'super_admin' THEN 1 END) as super_admin_users,
+    COUNT(CASE WHEN account_type = 'user' THEN 1 END) as regular_users,
+    COUNT(CASE WHEN created_at >= NOW() - INTERVAL '7 days' THEN 1 END) as recent_signups
+FROM users
+`
+
+type GetUserStatsRow struct {
+	TotalUsers      int64 `json:"totalUsers"`
+	AdminUsers      int64 `json:"adminUsers"`
+	SuperAdminUsers int64 `json:"superAdminUsers"`
+	RegularUsers    int64 `json:"regularUsers"`
+	RecentSignups   int64 `json:"recentSignups"`
+}
+
+func (q *Queries) GetUserStats(ctx context.Context) (GetUserStatsRow, error) {
+	row := q.db.QueryRow(ctx, getUserStats)
+	var i GetUserStatsRow
+	err := row.Scan(
+		&i.TotalUsers,
+		&i.AdminUsers,
+		&i.SuperAdminUsers,
+		&i.RegularUsers,
+		&i.RecentSignups,
+	)
+	return i, err
+}
+
+const listUsers = `-- name: ListUsers :many
+SELECT id, email, auth_provider, auth_provider_id, account_type, created_at, updated_at
+FROM users
+ORDER BY created_at DESC
+LIMIT $1 OFFSET $2
+`
+
+func (q *Queries) ListUsers(ctx context.Context, limit int32, offset int32) ([]User, error) {
+	rows, err := q.db.Query(ctx, listUsers, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []User
+	for rows.Next() {
+		var i User
+		if err := rows.Scan(
+			&i.ID,
+			&i.Email,
+			&i.AuthProvider,
+			&i.AuthProviderID,
+			&i.AccountType,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const updateUser = `-- name: UpdateUser :exec

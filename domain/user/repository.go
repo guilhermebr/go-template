@@ -15,4 +15,10 @@ type Repository interface {
 	GetByEmail(ctx context.Context, email string) (entities.User, error)
 	Update(ctx context.Context, user entities.User) error
 	Delete(ctx context.Context, id uuid.UUID) error
+
+	// Admin-specific methods
+	ListUsers(ctx context.Context, params entities.ListUsersParams) ([]entities.User, error)
+	CountUsers(ctx context.Context) (int64, error)
+	CountUsersByAccountType(ctx context.Context, accountType entities.AccountType) (int64, error)
+	GetUserStats(ctx context.Context) (entities.UserStats, error)
 }

@@ -16,6 +16,12 @@ import (
 //
 //		// make and configure a mocked user.Repository
 //		mockedRepository := &RepositoryMock{
+//			CountUsersFunc: func(ctx context.Context) (int64, error) {
+//				panic("mock out the CountUsers method")
+//			},
+//			CountUsersByAccountTypeFunc: func(ctx context.Context, accountType entities.AccountType) (int64, error) {
+//				panic("mock out the CountUsersByAccountType method")
+//			},
 //			CreateFunc: func(ctx context.Context, user entities.User) error {
 //				panic("mock out the Create method")
 //			},
@@ -28,6 +34,12 @@ import (
 //			GetByIDFunc: func(ctx context.Context, id uuid.UUID) (entities.User, error) {
 //				panic("mock out the GetByID method")
 //			},
+//			GetUserStatsFunc: func(ctx context.Context) (entities.UserStats, error) {
+//				panic("mock out the GetUserStats method")
+//			},
+//			ListUsersFunc: func(ctx context.Context, params entities.ListUsersParams) ([]entities.User, error) {
+//				panic("mock out the ListUsers method")
+//			},
 //			UpdateFunc: func(ctx context.Context, user entities.User) error {
 //				panic("mock out the Update method")
 //			},
@@ -38,6 +50,12 @@ import (
 //
 //	}
 type RepositoryMock struct {
+	// CountUsersFunc mocks the CountUsers method.
+	CountUsersFunc func(ctx context.Context) (int64, error)
+
+	// CountUsersByAccountTypeFunc mocks the CountUsersByAccountType method.
+	CountUsersByAccountTypeFunc func(ctx context.Context, accountType entities.AccountType) (int64, error)
+
 	// CreateFunc mocks the Create method.
 	CreateFunc func(ctx context.Context, user entities.User) error
 
@@ -50,11 +68,29 @@ type RepositoryMock struct {
 	// GetByIDFunc mocks the GetByID method.
 	GetByIDFunc func(ctx context.Context, id uuid.UUID) (entities.User, error)
 
+	// GetUserStatsFunc mocks the GetUserStats method.
+	GetUserStatsFunc func(ctx context.Context) (entities.UserStats, error)
+
+	// ListUsersFunc mocks the ListUsers method.
+	ListUsersFunc func(ctx context.Context, params entities.ListUsersParams) ([]entities.User, error)
+
 	// UpdateFunc mocks the Update method.
 	UpdateFunc func(ctx context.Context, user entities.User) error
 
 	// calls tracks calls to the methods.
 	calls struct {
+		// CountUsers holds details about calls to the CountUsers method.
+		CountUsers []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+		}
+		// CountUsersByAccountType holds details about calls to the CountUsersByAccountType method.
+		CountUsersByAccountType []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// AccountType is the accountType argument value.
+			AccountType entities.AccountType
+		}
 		// Create holds details about calls to the Create method.
 		Create []struct {
 			// Ctx is the ctx argument value.
@@ -83,6 +119,18 @@ type RepositoryMock struct {
 			// ID is the id argument value.
 			ID uuid.UUID
 		}
+		// GetUserStats holds details about calls to the GetUserStats method.
+		GetUserStats []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+		}
+		// ListUsers holds details about calls to the ListUsers method.
+		ListUsers []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Params is the params argument value.
+			Params entities.ListUsersParams
+		}
 		// Update holds details about calls to the Update method.
 		Update []struct {
 			// Ctx is the ctx argument value.
@@ -91,11 +139,91 @@ type RepositoryMock struct {
 			User entities.User
 		}
 	}
-	lockCreate     sync.RWMutex
-	lockDelete     sync.RWMutex
-	lockGetByEmail sync.RWMutex
-	lockGetByID    sync.RWMutex
-	lockUpdate     sync.RWMutex
+	lockCountUsers              sync.RWMutex
+	lockCountUsersByAccountType sync.RWMutex
+	lockCreate                  sync.RWMutex
+	lockDelete                  sync.RWMutex
+	lockGetByEmail              sync.RWMutex
+	lockGetByID                 sync.RWMutex
+	lockGetUserStats            sync.RWMutex
+	lockListUsers               sync.RWMutex
+	lockUpdate                  sync.RWMutex
+}
+
+// CountUsers calls CountUsersFunc.
+func (mock *RepositoryMock) CountUsers(ctx context.Context) (int64, error) {
+	callInfo := struct {
+		Ctx context.Context
+	}{
+		Ctx: ctx,
+	}
+	mock.lockCountUsers.Lock()
+	mock.calls.CountUsers = append(mock.calls.CountUsers, callInfo)
+	mock.lockCountUsers.Unlock()
+	if mock.CountUsersFunc == nil {
+		var (
+			nOut   int64
+			errOut error
+		)
+		return nOut, errOut
+	}
+	return mock.CountUsersFunc(ctx)
+}
+
+// CountUsersCalls gets all the calls that were made to CountUsers.
+// Check the length with:
+//
+//	len(mockedRepository.CountUsersCalls())
+func (mock *RepositoryMock) CountUsersCalls() []struct {
+	Ctx context.Context
+} {
+	var calls []struct {
+		Ctx context.Context
+	}
+	mock.lockCountUsers.RLock()
+	calls = mock.calls.CountUsers
+	mock.lockCountUsers.RUnlock()
+	return calls
+}
+
+// CountUsersByAccountType calls CountUsersByAccountTypeFunc.
+func (mock *RepositoryMock) CountUsersByAccountType(ctx context.Context, accountType entities.AccountType) (int64, error) {
+	callInfo := struct {
+		Ctx         context.Context
+		AccountType entities.AccountType
+	}{
+		Ctx:         ctx,
+		AccountType: accountType,
+	}
+	mock.lockCountUsersByAccountType.Lock()
+	mock.calls.CountUsersByAccountType = append(mock.calls.CountUsersByAccountType, callInfo)
+	mock.lockCountUsersByAccountType.Unlock()
+	if mock.CountUsersByAccountTypeFunc == nil {
+		var (
+			nOut   int64
+			errOut error
+		)
+		return nOut, errOut
+	}
+	return mock.CountUsersByAccountTypeFunc(ctx, accountType)
+}
+
+// CountUsersByAccountTypeCalls gets all the calls that were made to CountUsersByAccountType.
+// Check the length with:
+//
+//	len(mockedRepository.CountUsersByAccountTypeCalls())
+func (mock *RepositoryMock) CountUsersByAccountTypeCalls() []struct {
+	Ctx         context.Context
+	AccountType entities.AccountType
+} {
+	var calls []struct {
+		Ctx         context.Context
+		AccountType entities.AccountType
+	}
+	mock.lockCountUsersByAccountType.RLock()
+	calls = mock.calls.CountUsersByAccountType
+	mock.lockCountUsersByAccountType.RUnlock()
+	return calls
 }
 
 // Create calls CreateFunc.
@@ -253,6 +381,82 @@ func (mock *RepositoryMock) GetByIDCalls() []struct {
 	mock.lockGetByID.RLock()
 	calls = mock.calls.GetByID
 	mock.lockGetByID.RUnlock()
+	return calls
+}
+
+// GetUserStats calls GetUserStatsFunc.
+func (mock *RepositoryMock) GetUserStats(ctx context.Context) (entities.UserStats, error) {
+	callInfo := struct {
+		Ctx context.Context
+	}{
+		Ctx: ctx,
+	}
+	mock.lockGetUserStats.Lock()
+	mock.calls.GetUserStats = append(mock.calls.GetUserStats, callInfo)
+	mock.lockGetUserStats.Unlock()
+	if mock.GetUserStatsFunc == nil {
+		var (
+			userStatsOut entities.UserStats
+			errOut       error
+		)
+		return userStatsOut, errOut
+	}
+	return mock.GetUserStatsFunc(ctx)
+}
+
+// GetUserStatsCalls gets all the calls that were made to GetUserStats.
+// Check the length with:
+//
+//	len(mockedRepository.GetUserStatsCalls())
+func (mock *RepositoryMock) GetUserStatsCalls() []struct {
+	Ctx context.Context
+} {
+	var calls []struct {
+		Ctx context.Context
+	}
+	mock.lockGetUserStats.RLock()
+	calls = mock.calls.GetUserStats
+	mock.lockGetUserStats.RUnlock()
+	return calls
+}
+
+// ListUsers calls ListUsersFunc.
+func (mock *RepositoryMock) ListUsers(ctx context.Context, params entities.ListUsersParams) ([]entities.User, error) {
+	callInfo := struct {
+		Ctx    context.Context
+		Params entities.ListUsersParams
+	}{
+		Ctx:    ctx,
+		Params: params,
+	}
+	mock.lockListUsers.Lock()
+	mock.calls.ListUsers = append(mock.calls.ListUsers, callInfo)
+	mock.lockListUsers.Unlock()
+	if mock.ListUsersFunc == nil {
+		var (
+			usersOut []entities.User
+			errOut   error
+		)
+		return usersOut, errOut
+	}
+	return mock.ListUsersFunc(ctx, params)
+}
+
+// ListUsersCalls gets all the calls that were made to ListUsers.
+// Check the length with:
+//
+//	len(mockedRepository.ListUsersCalls())
+func (mock *RepositoryMock) ListUsersCalls() []struct {
+	Ctx    context.Context
+	Params entities.ListUsersParams
+} {
+	var calls []struct {
+		Ctx    context.Context
+		Params entities.ListUsersParams
+	}
+	mock.lockListUsers.RLock()
+	calls = mock.calls.ListUsers
+	mock.lockListUsers.RUnlock()
 	return calls
 }
 

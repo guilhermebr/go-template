@@ -3,11 +3,17 @@ package auth
 import (
 	"go-template/app/api/middleware"
 	"go-template/domain/auth"
+	"go-template/domain/entities"
 	"net/http"
 
 	"github.com/go-chi/render"
 	"github.com/gofrs/uuid/v5"
 )
+
+type RegisterRequest struct {
+	Email    string `json:"email" validate:"required,email"`
+	Password string `json:"password" validate:"required,min=6"`
+}
 
 // Register godoc
 // @Summary      Register a new user
@@ -15,14 +21,14 @@ import (
 // @Tags         auth
 // @Accept       json
 // @Produce      json
-// @Param        request body auth.RegisterRequest true "Registration request"
+// @Param        request body RegisterRequest true "Registration request"
 // @Success      201 {object} auth.AuthResponse
 // @Failure      400 {object} map[string]string
 // @Failure      409 {object} map[string]string
 // @Failure      500 {object} map[string]string
 // @Router       /api/v1/auth/register [post]
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
-	var req auth.RegisterRequest
+	var req RegisterRequest
 	if err := render.DecodeJSON(r.Body, &req); err != nil {
 		render.Status(r, http.StatusBadRequest)
 		render.JSON(w, r, map[string]string{
@@ -39,7 +45,8 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response, err := h.authUC.Register(r.Context(), req)
+	// Create user using userUC with empty provider (uses default)
+	user, err := h.userUC.CreateUser(r.Context(), req.Email, req.Password, "", entities.AccountTypeUser)
 	if err != nil {
 		// Check for duplicate key error
 		if err.Error() == "duplicate key" {
@@ -55,6 +62,22 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 			"error": "registration failed",
 		})
 		return
+	}
+
+	// Generate JWT token
+	token, err := h.jwtService.GenerateToken(user.ID.String(), user.Email, user.AccountType.String())
+	if err != nil {
+		render.Status(r, http.StatusInternalServerError)
+		render.JSON(w, r, map[string]string{
+			"error": "failed to generate token",
+		})
+		return
+	}
+
+	// Create auth response
+	response := auth.AuthResponse{
+		Token: token,
+		User:  user,
 	}
 
 	render.Status(r, http.StatusCreated)

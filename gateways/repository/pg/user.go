@@ -127,3 +127,56 @@ func (r *UserRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	}
 	return nil
 }
+
+func (r *UserRepository) ListUsers(ctx context.Context, params entities.ListUsersParams) ([]entities.User, error) {
+	rows, err := r.queries.ListUsers(ctx, params.Limit, params.Offset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list users: %w", err)
+	}
+
+	users := make([]entities.User, len(rows))
+	for i, row := range rows {
+		users[i] = entities.User{
+			ID:             row.ID,
+			Email:          row.Email,
+			AuthProvider:   row.AuthProvider,
+			AuthProviderID: *row.AuthProviderID,
+			AccountType:    entities.AccountType(row.AccountType),
+			CreatedAt:      *row.CreatedAt,
+			UpdatedAt:      *row.UpdatedAt,
+		}
+	}
+
+	return users, nil
+}
+
+func (r *UserRepository) CountUsers(ctx context.Context) (int64, error) {
+	count, err := r.queries.CountUsers(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count users: %w", err)
+	}
+	return count, nil
+}
+
+func (r *UserRepository) CountUsersByAccountType(ctx context.Context, accountType entities.AccountType) (int64, error) {
+	count, err := r.queries.CountUsersByAccountType(ctx, gen.AccountType(accountType))
+	if err != nil {
+		return 0, fmt.Errorf("failed to count users by account type: %w", err)
+	}
+	return count, nil
+}
+
+func (r *UserRepository) GetUserStats(ctx context.Context) (entities.UserStats, error) {
+	stats, err := r.queries.GetUserStats(ctx)
+	if err != nil {
+		return entities.UserStats{}, fmt.Errorf("failed to get user stats: %w", err)
+	}
+
+	return entities.UserStats{
+		TotalUsers:      stats.TotalUsers,
+		AdminUsers:      stats.AdminUsers,
+		SuperAdminUsers: stats.SuperAdminUsers,
+		RegularUsers:    stats.RegularUsers,
+		RecentSignups:   stats.RecentSignups,
+	}, nil
+}

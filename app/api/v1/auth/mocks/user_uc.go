@@ -16,6 +16,9 @@ import (
 //
 //		// make and configure a mocked auth.UserUseCase
 //		mockedUserUseCase := &UserUseCaseMock{
+//			CreateUserFunc: func(ctx context.Context, email string, password string, authProvider string, accountType entities.AccountType) (entities.User, error) {
+//				panic("mock out the CreateUser method")
+//			},
 //			GetMeFunc: func(ctx context.Context, userID uuid.UUID) (entities.User, error) {
 //				panic("mock out the GetMe method")
 //			},
@@ -26,11 +29,27 @@ import (
 //
 //	}
 type UserUseCaseMock struct {
+	// CreateUserFunc mocks the CreateUser method.
+	CreateUserFunc func(ctx context.Context, email string, password string, authProvider string, accountType entities.AccountType) (entities.User, error)
+
 	// GetMeFunc mocks the GetMe method.
 	GetMeFunc func(ctx context.Context, userID uuid.UUID) (entities.User, error)
 
 	// calls tracks calls to the methods.
 	calls struct {
+		// CreateUser holds details about calls to the CreateUser method.
+		CreateUser []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Email is the email argument value.
+			Email string
+			// Password is the password argument value.
+			Password string
+			// AuthProvider is the authProvider argument value.
+			AuthProvider string
+			// AccountType is the accountType argument value.
+			AccountType entities.AccountType
+		}
 		// GetMe holds details about calls to the GetMe method.
 		GetMe []struct {
 			// Ctx is the ctx argument value.
@@ -39,7 +58,60 @@ type UserUseCaseMock struct {
 			UserID uuid.UUID
 		}
 	}
-	lockGetMe sync.RWMutex
+	lockCreateUser sync.RWMutex
+	lockGetMe      sync.RWMutex
+}
+
+// CreateUser calls CreateUserFunc.
+func (mock *UserUseCaseMock) CreateUser(ctx context.Context, email string, password string, authProvider string, accountType entities.AccountType) (entities.User, error) {
+	callInfo := struct {
+		Ctx          context.Context
+		Email        string
+		Password     string
+		AuthProvider string
+		AccountType  entities.AccountType
+	}{
+		Ctx:          ctx,
+		Email:        email,
+		Password:     password,
+		AuthProvider: authProvider,
+		AccountType:  accountType,
+	}
+	mock.lockCreateUser.Lock()
+	mock.calls.CreateUser = append(mock.calls.CreateUser, callInfo)
+	mock.lockCreateUser.Unlock()
+	if mock.CreateUserFunc == nil {
+		var (
+			userOut entities.User
+			errOut  error
+		)
+		return userOut, errOut
+	}
+	return mock.CreateUserFunc(ctx, email, password, authProvider, accountType)
+}
+
+// CreateUserCalls gets all the calls that were made to CreateUser.
+// Check the length with:
+//
+//	len(mockedUserUseCase.CreateUserCalls())
+func (mock *UserUseCaseMock) CreateUserCalls() []struct {
+	Ctx          context.Context
+	Email        string
+	Password     string
+	AuthProvider string
+	AccountType  entities.AccountType
+} {
+	var calls []struct {
+		Ctx          context.Context
+		Email        string
+		Password     string
+		AuthProvider string
+		AccountType  entities.AccountType
+	}
+	mock.lockCreateUser.RLock()
+	calls = mock.calls.CreateUser
+	mock.lockCreateUser.RUnlock()
+	return calls
 }
 
 // GetMe calls GetMeFunc.

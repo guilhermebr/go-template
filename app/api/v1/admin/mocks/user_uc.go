@@ -16,8 +16,26 @@ import (
 //
 //		// make and configure a mocked admin.UserUseCase
 //		mockedUserUseCase := &UserUseCaseMock{
+//			CreateUserFunc: func(ctx context.Context, email string, password string, authProvider string, accountType entities.AccountType) (entities.User, error) {
+//				panic("mock out the CreateUser method")
+//			},
+//			DeleteUserFunc: func(ctx context.Context, userID uuid.UUID) error {
+//				panic("mock out the DeleteUser method")
+//			},
 //			GetUserByIDFunc: func(ctx context.Context, id uuid.UUID) (entities.User, error) {
 //				panic("mock out the GetUserByID method")
+//			},
+//			GetUserStatsFunc: func(ctx context.Context) (entities.UserStats, error) {
+//				panic("mock out the GetUserStats method")
+//			},
+//			ListUsersFunc: func(ctx context.Context, page int, pageSize int) ([]entities.User, int64, error) {
+//				panic("mock out the ListUsers method")
+//			},
+//			SearchUsersFunc: func(ctx context.Context, page int, pageSize int, search string, accountType string) ([]entities.User, int64, error) {
+//				panic("mock out the SearchUsers method")
+//			},
+//			UpdateUserFunc: func(ctx context.Context, user entities.User) error {
+//				panic("mock out the UpdateUser method")
 //			},
 //		}
 //
@@ -26,11 +44,49 @@ import (
 //
 //	}
 type UserUseCaseMock struct {
+	// CreateUserFunc mocks the CreateUser method.
+	CreateUserFunc func(ctx context.Context, email string, password string, authProvider string, accountType entities.AccountType) (entities.User, error)
+
+	// DeleteUserFunc mocks the DeleteUser method.
+	DeleteUserFunc func(ctx context.Context, userID uuid.UUID) error
+
 	// GetUserByIDFunc mocks the GetUserByID method.
 	GetUserByIDFunc func(ctx context.Context, id uuid.UUID) (entities.User, error)
 
+	// GetUserStatsFunc mocks the GetUserStats method.
+	GetUserStatsFunc func(ctx context.Context) (entities.UserStats, error)
+
+	// ListUsersFunc mocks the ListUsers method.
+	ListUsersFunc func(ctx context.Context, page int, pageSize int) ([]entities.User, int64, error)
+
+	// SearchUsersFunc mocks the SearchUsers method.
+	SearchUsersFunc func(ctx context.Context, page int, pageSize int, search string, accountType string) ([]entities.User, int64, error)
+
+	// UpdateUserFunc mocks the UpdateUser method.
+	UpdateUserFunc func(ctx context.Context, user entities.User) error
+
 	// calls tracks calls to the methods.
 	calls struct {
+		// CreateUser holds details about calls to the CreateUser method.
+		CreateUser []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Email is the email argument value.
+			Email string
+			// Password is the password argument value.
+			Password string
+			// AuthProvider is the authProvider argument value.
+			AuthProvider string
+			// AccountType is the accountType argument value.
+			AccountType entities.AccountType
+		}
+		// DeleteUser holds details about calls to the DeleteUser method.
+		DeleteUser []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// UserID is the userID argument value.
+			UserID uuid.UUID
+		}
 		// GetUserByID holds details about calls to the GetUserByID method.
 		GetUserByID []struct {
 			// Ctx is the ctx argument value.
@@ -38,8 +94,139 @@ type UserUseCaseMock struct {
 			// ID is the id argument value.
 			ID uuid.UUID
 		}
+		// GetUserStats holds details about calls to the GetUserStats method.
+		GetUserStats []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+		}
+		// ListUsers holds details about calls to the ListUsers method.
+		ListUsers []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Page is the page argument value.
+			Page int
+			// PageSize is the pageSize argument value.
+			PageSize int
+		}
+		// SearchUsers holds details about calls to the SearchUsers method.
+		SearchUsers []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Page is the page argument value.
+			Page int
+			// PageSize is the pageSize argument value.
+			PageSize int
+			// Search is the search argument value.
+			Search string
+			// AccountType is the accountType argument value.
+			AccountType string
+		}
+		// UpdateUser holds details about calls to the UpdateUser method.
+		UpdateUser []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// User is the user argument value.
+			User entities.User
+		}
 	}
-	lockGetUserByID sync.RWMutex
+	lockCreateUser   sync.RWMutex
+	lockDeleteUser   sync.RWMutex
+	lockGetUserByID  sync.RWMutex
+	lockGetUserStats sync.RWMutex
+	lockListUsers    sync.RWMutex
+	lockSearchUsers  sync.RWMutex
+	lockUpdateUser   sync.RWMutex
+}
+
+// CreateUser calls CreateUserFunc.
+func (mock *UserUseCaseMock) CreateUser(ctx context.Context, email string, password string, authProvider string, accountType entities.AccountType) (entities.User, error) {
+	callInfo := struct {
+		Ctx          context.Context
+		Email        string
+		Password     string
+		AuthProvider string
+		AccountType  entities.AccountType
+	}{
+		Ctx:          ctx,
+		Email:        email,
+		Password:     password,
+		AuthProvider: authProvider,
+		AccountType:  accountType,
+	}
+	mock.lockCreateUser.Lock()
+	mock.calls.CreateUser = append(mock.calls.CreateUser, callInfo)
+	mock.lockCreateUser.Unlock()
+	if mock.CreateUserFunc == nil {
+		var (
+			userOut entities.User
+			errOut  error
+		)
+		return userOut, errOut
+	}
+	return mock.CreateUserFunc(ctx, email, password, authProvider, accountType)
+}
+
+// CreateUserCalls gets all the calls that were made to CreateUser.
+// Check the length with:
+//
+//	len(mockedUserUseCase.CreateUserCalls())
+func (mock *UserUseCaseMock) CreateUserCalls() []struct {
+	Ctx          context.Context
+	Email        string
+	Password     string
+	AuthProvider string
+	AccountType  entities.AccountType
+} {
+	var calls []struct {
+		Ctx          context.Context
+		Email        string
+		Password     string
+		AuthProvider string
+		AccountType  entities.AccountType
+	}
+	mock.lockCreateUser.RLock()
+	calls = mock.calls.CreateUser
+	mock.lockCreateUser.RUnlock()
+	return calls
+}
+
+// DeleteUser calls DeleteUserFunc.
+func (mock *UserUseCaseMock) DeleteUser(ctx context.Context, userID uuid.UUID) error {
+	callInfo := struct {
+		Ctx    context.Context
+		UserID uuid.UUID
+	}{
+		Ctx:    ctx,
+		UserID: userID,
+	}
+	mock.lockDeleteUser.Lock()
+	mock.calls.DeleteUser = append(mock.calls.DeleteUser, callInfo)
+	mock.lockDeleteUser.Unlock()
+	if mock.DeleteUserFunc == nil {
+		var (
+			errOut error
+		)
+		return errOut
+	}
+	return mock.DeleteUserFunc(ctx, userID)
+}
+
+// DeleteUserCalls gets all the calls that were made to DeleteUser.
+// Check the length with:
+//
+//	len(mockedUserUseCase.DeleteUserCalls())
+func (mock *UserUseCaseMock) DeleteUserCalls() []struct {
+	Ctx    context.Context
+	UserID uuid.UUID
+} {
+	var calls []struct {
+		Ctx    context.Context
+		UserID uuid.UUID
+	}
+	mock.lockDeleteUser.RLock()
+	calls = mock.calls.DeleteUser
+	mock.lockDeleteUser.RUnlock()
+	return calls
 }
 
 // GetUserByID calls GetUserByIDFunc.
@@ -79,5 +266,178 @@ func (mock *UserUseCaseMock) GetUserByIDCalls() []struct {
 	mock.lockGetUserByID.RLock()
 	calls = mock.calls.GetUserByID
 	mock.lockGetUserByID.RUnlock()
+	return calls
+}
+
+// GetUserStats calls GetUserStatsFunc.
+func (mock *UserUseCaseMock) GetUserStats(ctx context.Context) (entities.UserStats, error) {
+	callInfo := struct {
+		Ctx context.Context
+	}{
+		Ctx: ctx,
+	}
+	mock.lockGetUserStats.Lock()
+	mock.calls.GetUserStats = append(mock.calls.GetUserStats, callInfo)
+	mock.lockGetUserStats.Unlock()
+	if mock.GetUserStatsFunc == nil {
+		var (
+			userStatsOut entities.UserStats
+			errOut       error
+		)
+		return userStatsOut, errOut
+	}
+	return mock.GetUserStatsFunc(ctx)
+}
+
+// GetUserStatsCalls gets all the calls that were made to GetUserStats.
+// Check the length with:
+//
+//	len(mockedUserUseCase.GetUserStatsCalls())
+func (mock *UserUseCaseMock) GetUserStatsCalls() []struct {
+	Ctx context.Context
+} {
+	var calls []struct {
+		Ctx context.Context
+	}
+	mock.lockGetUserStats.RLock()
+	calls = mock.calls.GetUserStats
+	mock.lockGetUserStats.RUnlock()
+	return calls
+}
+
+// ListUsers calls ListUsersFunc.
+func (mock *UserUseCaseMock) ListUsers(ctx context.Context, page int, pageSize int) ([]entities.User, int64, error) {
+	callInfo := struct {
+		Ctx      context.Context
+		Page     int
+		PageSize int
+	}{
+		Ctx:      ctx,
+		Page:     page,
+		PageSize: pageSize,
+	}
+	mock.lockListUsers.Lock()
+	mock.calls.ListUsers = append(mock.calls.ListUsers, callInfo)
+	mock.lockListUsers.Unlock()
+	if mock.ListUsersFunc == nil {
+		var (
+			usersOut []entities.User
+			nOut     int64
+			errOut   error
+		)
+		return usersOut, nOut, errOut
+	}
+	return mock.ListUsersFunc(ctx, page, pageSize)
+}
+
+// ListUsersCalls gets all the calls that were made to ListUsers.
+// Check the length with:
+//
+//	len(mockedUserUseCase.ListUsersCalls())
+func (mock *UserUseCaseMock) ListUsersCalls() []struct {
+	Ctx      context.Context
+	Page     int
+	PageSize int
+} {
+	var calls []struct {
+		Ctx      context.Context
+		Page     int
+		PageSize int
+	}
+	mock.lockListUsers.RLock()
+	calls = mock.calls.ListUsers
+	mock.lockListUsers.RUnlock()
+	return calls
+}
+
+// SearchUsers calls SearchUsersFunc.
+func (mock *UserUseCaseMock) SearchUsers(ctx context.Context, page int, pageSize int, search string, accountType string) ([]entities.User, int64, error) {
+	callInfo := struct {
+		Ctx         context.Context
+		Page        int
+		PageSize    int
+		Search      string
+		AccountType string
+	}{
+		Ctx:         ctx,
+		Page:        page,
+		PageSize:    pageSize,
+		Search:      search,
+		AccountType: accountType,
+	}
+	mock.lockSearchUsers.Lock()
+	mock.calls.SearchUsers = append(mock.calls.SearchUsers, callInfo)
+	mock.lockSearchUsers.Unlock()
+	if mock.SearchUsersFunc == nil {
+		var (
+			usersOut []entities.User
+			nOut     int64
+			errOut   error
+		)
+		return usersOut, nOut, errOut
+	}
+	return mock.SearchUsersFunc(ctx, page, pageSize, search, accountType)
+}
+
+// SearchUsersCalls gets all the calls that were made to SearchUsers.
+// Check the length with:
+//
+//	len(mockedUserUseCase.SearchUsersCalls())
+func (mock *UserUseCaseMock) SearchUsersCalls() []struct {
+	Ctx         context.Context
+	Page        int
+	PageSize    int
+	Search      string
+	AccountType string
+} {
+	var calls []struct {
+		Ctx         context.Context
+		Page        int
+		PageSize    int
+		Search      string
+		AccountType string
+	}
+	mock.lockSearchUsers.RLock()
+	calls = mock.calls.SearchUsers
+	mock.lockSearchUsers.RUnlock()
+	return calls
+}
+
+// UpdateUser calls UpdateUserFunc.
+func (mock *UserUseCaseMock) UpdateUser(ctx context.Context, user entities.User) error {
+	callInfo := struct {
+		Ctx  context.Context
+		User entities.User
+	}{
+		Ctx:  ctx,
+		User: user,
+	}
+	mock.lockUpdateUser.Lock()
+	mock.calls.UpdateUser = append(mock.calls.UpdateUser, callInfo)
+	mock.lockUpdateUser.Unlock()
+	if mock.UpdateUserFunc == nil {
+		var (
+			errOut error
+		)
+		return errOut
+	}
+	return mock.UpdateUserFunc(ctx, user)
+}
+
+// UpdateUserCalls gets all the calls that were made to UpdateUser.
+// Check the length with:
+//
+//	len(mockedUserUseCase.UpdateUserCalls())
+func (mock *UserUseCaseMock) UpdateUserCalls() []struct {
+	Ctx  context.Context
+	User entities.User
+} {
+	var calls []struct {
+		Ctx  context.Context
+		User entities.User
+	}
+	mock.lockUpdateUser.RLock()
+	calls = mock.calls.UpdateUser
+	mock.lockUpdateUser.RUnlock()
 	return calls
 }

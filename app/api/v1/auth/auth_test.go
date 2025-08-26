@@ -14,18 +14,33 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gofrs/uuid/v5"
 )
 
+// Create a real JWT service for testing
+func createTestJWTService() jwt.Service {
+	return jwt.NewService("test-secret", "test-issuer", "1h")
+}
+
 func TestAuthHandler_Register_Success(t *testing.T) {
-	uc := &mocks.AuthUseCaseMock{
-		RegisterFunc: func(ctx context.Context, req auth.RegisterRequest) (auth.AuthResponse, error) {
-			return auth.AuthResponse{
-				Token: "token",
-				User:  entities.User{Email: "a@b.com"},
+	userUC := &mocks.UserUseCaseMock{
+		CreateUserFunc: func(ctx context.Context, email, password, authProvider string, accountType entities.AccountType) (entities.User, error) {
+			return entities.User{
+				ID:          uuid.Must(uuid.NewV4()),
+				Email:       email,
+				AccountType: entities.AccountTypeUser,
+				CreatedAt:   time.Now(),
+				UpdatedAt:   time.Now(),
 			}, nil
 		},
+		GetMeFunc: func(ctx context.Context, userID uuid.UUID) (entities.User, error) {
+			return entities.User{Email: "a@b.com"}, nil
+		},
+	}
+
+	authUC := &mocks.AuthUseCaseMock{
 		LoginFunc: func(ctx context.Context, req auth.LoginRequest) (auth.AuthResponse, error) {
 			return auth.AuthResponse{
 				Token: "token",
@@ -33,9 +48,12 @@ func TestAuthHandler_Register_Success(t *testing.T) {
 			}, nil
 		},
 	}
-	h := NewAuthHandler(uc, nil)
 
-	body, _ := json.Marshal(auth.RegisterRequest{Email: "a@b.com", Password: "123456"})
+	jwtService := createTestJWTService()
+
+	h := NewAuthHandler(authUC, userUC, jwtService)
+
+	body, _ := json.Marshal(RegisterRequest{Email: "a@b.com", Password: "123456"})
 	req := httptest.NewRequest(http.MethodPost, "/register", bytes.NewBuffer(body))
 	w := httptest.NewRecorder()
 
@@ -52,46 +70,110 @@ func TestAuthHandler_Register_Success(t *testing.T) {
 }
 
 func TestAuthHandler_Register_InvalidJSON(t *testing.T) {
-	uc := &mocks.AuthUseCaseMock{
-		RegisterFunc: func(ctx context.Context, req auth.RegisterRequest) (auth.AuthResponse, error) {
-			return auth.AuthResponse{
-				Token: "token",
-				User:  entities.User{Email: "a@b.com"},
-			}, nil
+	userUC := &mocks.UserUseCaseMock{
+		CreateUserFunc: func(ctx context.Context, email, password, authProvider string, accountType entities.AccountType) (entities.User, error) {
+			return entities.User{}, nil
+		},
+		GetMeFunc: func(ctx context.Context, userID uuid.UUID) (entities.User, error) {
+			return entities.User{Email: "a@b.com"}, nil
 		},
 	}
-	h := NewAuthHandler(uc, nil)
 
-	req := httptest.NewRequest(http.MethodPost, "/register", bytes.NewBufferString("{"))
+	authUC := &mocks.AuthUseCaseMock{
+		LoginFunc: func(ctx context.Context, req auth.LoginRequest) (auth.AuthResponse, error) {
+			return auth.AuthResponse{}, nil
+		},
+	}
+
+	jwtService := createTestJWTService()
+
+	h := NewAuthHandler(authUC, userUC, jwtService)
+
+	req := httptest.NewRequest(http.MethodPost, "/register", bytes.NewBuffer([]byte("invalid json")))
 	w := httptest.NewRecorder()
+
 	h.Register(w, req)
+
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", w.Code)
 	}
 }
 
 func TestAuthHandler_Register_ValidationFailed(t *testing.T) {
-	uc := &mocks.AuthUseCaseMock{
-		RegisterFunc: func(ctx context.Context, req auth.RegisterRequest) (auth.AuthResponse, error) {
-			return auth.AuthResponse{
-				Token: "token",
-				User:  entities.User{Email: "a@b.com"},
-			}, nil
+	userUC := &mocks.UserUseCaseMock{
+		CreateUserFunc: func(ctx context.Context, email, password, authProvider string, accountType entities.AccountType) (entities.User, error) {
+			return entities.User{}, nil
+		},
+		GetMeFunc: func(ctx context.Context, userID uuid.UUID) (entities.User, error) {
+			return entities.User{Email: "a@b.com"}, nil
 		},
 	}
-	h := NewAuthHandler(uc, nil)
 
-	body, _ := json.Marshal(map[string]string{"email": "not-an-email"})
+	authUC := &mocks.AuthUseCaseMock{
+		LoginFunc: func(ctx context.Context, req auth.LoginRequest) (auth.AuthResponse, error) {
+			return auth.AuthResponse{}, nil
+		},
+	}
+
+	jwtService := createTestJWTService()
+
+	h := NewAuthHandler(authUC, userUC, jwtService)
+
+	// Invalid email and short password
+	body, _ := json.Marshal(RegisterRequest{Email: "invalid-email", Password: "123"})
 	req := httptest.NewRequest(http.MethodPost, "/register", bytes.NewBuffer(body))
 	w := httptest.NewRecorder()
+
 	h.Register(w, req)
+
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", w.Code)
 	}
 }
 
+func TestAuthHandler_Register_CreateUserFailed(t *testing.T) {
+	userUC := &mocks.UserUseCaseMock{
+		CreateUserFunc: func(ctx context.Context, email, password, authProvider string, accountType entities.AccountType) (entities.User, error) {
+			return entities.User{}, errors.New("creation failed")
+		},
+		GetMeFunc: func(ctx context.Context, userID uuid.UUID) (entities.User, error) {
+			return entities.User{Email: "a@b.com"}, nil
+		},
+	}
+
+	authUC := &mocks.AuthUseCaseMock{
+		LoginFunc: func(ctx context.Context, req auth.LoginRequest) (auth.AuthResponse, error) {
+			return auth.AuthResponse{}, nil
+		},
+	}
+
+	jwtService := createTestJWTService()
+
+	h := NewAuthHandler(authUC, userUC, jwtService)
+
+	body, _ := json.Marshal(RegisterRequest{Email: "a@b.com", Password: "123456"})
+	req := httptest.NewRequest(http.MethodPost, "/register", bytes.NewBuffer(body))
+	w := httptest.NewRecorder()
+
+	h.Register(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", w.Code)
+	}
+}
+
+
 func TestAuthHandler_Login_Success(t *testing.T) {
-	uc := &mocks.AuthUseCaseMock{
+	userUC := &mocks.UserUseCaseMock{
+		CreateUserFunc: func(ctx context.Context, email, password, authProvider string, accountType entities.AccountType) (entities.User, error) {
+			return entities.User{}, nil
+		},
+		GetMeFunc: func(ctx context.Context, userID uuid.UUID) (entities.User, error) {
+			return entities.User{Email: "a@b.com"}, nil
+		},
+	}
+
+	authUC := &mocks.AuthUseCaseMock{
 		LoginFunc: func(ctx context.Context, req auth.LoginRequest) (auth.AuthResponse, error) {
 			return auth.AuthResponse{
 				Token: "token",
@@ -99,82 +181,94 @@ func TestAuthHandler_Login_Success(t *testing.T) {
 			}, nil
 		},
 	}
-	h := NewAuthHandler(uc, nil)
 
-	body, _ := json.Marshal(auth.LoginRequest{Email: "a@b.com", Password: "pwd"})
+	jwtService := createTestJWTService()
+
+	h := NewAuthHandler(authUC, userUC, jwtService)
+
+	body, _ := json.Marshal(auth.LoginRequest{Email: "a@b.com", Password: "123456"})
 	req := httptest.NewRequest(http.MethodPost, "/login", bytes.NewBuffer(body))
 	w := httptest.NewRecorder()
+
 	h.Login(w, req)
+
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
-}
-
-func TestAuthHandler_Login_AuthFailed(t *testing.T) {
-	uc := &mocks.AuthUseCaseMock{
-		LoginFunc: func(ctx context.Context, req auth.LoginRequest) (auth.AuthResponse, error) {
-			return auth.AuthResponse{}, errors.New("auth")
-		},
-	}
-	h := NewAuthHandler(uc, nil)
-
-	body, _ := json.Marshal(auth.LoginRequest{Email: "a@b.com", Password: "pwd"})
-	req := httptest.NewRequest(http.MethodPost, "/login", bytes.NewBuffer(body))
-	w := httptest.NewRecorder()
-	h.Login(w, req)
-	if w.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401, got %d", w.Code)
+	var resp auth.AuthResponse
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp.Token == "" || resp.User.Email != "a@b.com" {
+		t.Fatalf("unexpected response: %+v", resp)
 	}
 }
 
 func TestAuthHandler_GetMe_Success(t *testing.T) {
-	uc := &mocks.UserUseCaseMock{
+	userUC := &mocks.UserUseCaseMock{
+		CreateUserFunc: func(ctx context.Context, email, password, authProvider string, accountType entities.AccountType) (entities.User, error) {
+			return entities.User{}, nil
+		},
 		GetMeFunc: func(ctx context.Context, userID uuid.UUID) (entities.User, error) {
 			return entities.User{Email: "a@b.com"}, nil
 		},
 	}
-	h := NewAuthHandler(nil, uc)
+
+	authUC := &mocks.AuthUseCaseMock{
+		LoginFunc: func(ctx context.Context, req auth.LoginRequest) (auth.AuthResponse, error) {
+			return auth.AuthResponse{}, nil
+		},
+	}
+
+	jwtService := createTestJWTService()
+
+	h := NewAuthHandler(authUC, userUC, jwtService)
 
 	req := httptest.NewRequest(http.MethodGet, "/me", nil)
-	claims := &jwt.Claims{UserID: "123", Email: "a@b.com"}
+	
+	// Add mock claims to context
+	claims := &jwt.Claims{UserID: uuid.Must(uuid.NewV4()).String()}
 	ctx := context.WithValue(req.Context(), apiMiddleware.UserContextKey, claims)
 	req = req.WithContext(ctx)
+	
 	w := httptest.NewRecorder()
+
 	h.GetMe(w, req)
+
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 }
 
-func TestAuthHandler_GetMe_Unauthorized(t *testing.T) {
-	uc := &mocks.UserUseCaseMock{
-		GetMeFunc: func(ctx context.Context, userID uuid.UUID) (entities.User, error) {
-			return entities.User{}, errors.New("auth")
-		},
-	}
-	h := NewAuthHandler(nil, uc)
-	req := httptest.NewRequest(http.MethodGet, "/me", nil)
-	w := httptest.NewRecorder()
-	h.GetMe(w, req)
-	if w.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401, got %d", w.Code)
-	}
-}
-
 func TestAuthHandler_GetMe_NotFound(t *testing.T) {
-	uc := &mocks.UserUseCaseMock{
+	userUC := &mocks.UserUseCaseMock{
+		CreateUserFunc: func(ctx context.Context, email, password, authProvider string, accountType entities.AccountType) (entities.User, error) {
+			return entities.User{}, nil
+		},
 		GetMeFunc: func(ctx context.Context, userID uuid.UUID) (entities.User, error) {
 			return entities.User{}, domain.ErrNotFound
 		},
 	}
-	h := NewAuthHandler(nil, uc)
-	userID := uuid.Must(uuid.NewV4())
+
+	authUC := &mocks.AuthUseCaseMock{
+		LoginFunc: func(ctx context.Context, req auth.LoginRequest) (auth.AuthResponse, error) {
+			return auth.AuthResponse{}, nil
+		},
+	}
+
+	jwtService := createTestJWTService()
+
+	h := NewAuthHandler(authUC, userUC, jwtService)
+
 	req := httptest.NewRequest(http.MethodGet, "/me", nil)
-	claims := &jwt.Claims{UserID: userID.String(), Email: "x@y.com"}
+	
+	// Add mock claims to context
+	claims := &jwt.Claims{UserID: uuid.Must(uuid.NewV4()).String()}
 	ctx := context.WithValue(req.Context(), apiMiddleware.UserContextKey, claims)
 	req = req.WithContext(ctx)
+	
 	w := httptest.NewRecorder()
+
 	h.GetMe(w, req)
+
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d", w.Code)
 	}

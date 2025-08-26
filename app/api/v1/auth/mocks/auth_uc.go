@@ -18,9 +18,6 @@ import (
 //			LoginFunc: func(ctx context.Context, req auth.LoginRequest) (auth.AuthResponse, error) {
 //				panic("mock out the Login method")
 //			},
-//			RegisterFunc: func(ctx context.Context, req auth.RegisterRequest) (auth.AuthResponse, error) {
-//				panic("mock out the Register method")
-//			},
 //		}
 //
 //		// use mockedAuthUseCase in code that requires auth.AuthUseCase
@@ -31,9 +28,6 @@ type AuthUseCaseMock struct {
 	// LoginFunc mocks the Login method.
 	LoginFunc func(ctx context.Context, req auth.LoginRequest) (auth.AuthResponse, error)
 
-	// RegisterFunc mocks the Register method.
-	RegisterFunc func(ctx context.Context, req auth.RegisterRequest) (auth.AuthResponse, error)
-
 	// calls tracks calls to the methods.
 	calls struct {
 		// Login holds details about calls to the Login method.
@@ -43,16 +37,8 @@ type AuthUseCaseMock struct {
 			// Req is the req argument value.
 			Req auth.LoginRequest
 		}
-		// Register holds details about calls to the Register method.
-		Register []struct {
-			// Ctx is the ctx argument value.
-			Ctx context.Context
-			// Req is the req argument value.
-			Req auth.RegisterRequest
-		}
 	}
-	lockLogin    sync.RWMutex
-	lockRegister sync.RWMutex
+	lockLogin sync.RWMutex
 }
 
 // Login calls LoginFunc.
@@ -92,45 +78,5 @@ func (mock *AuthUseCaseMock) LoginCalls() []struct {
 	mock.lockLogin.RLock()
 	calls = mock.calls.Login
 	mock.lockLogin.RUnlock()
-	return calls
-}
-
-// Register calls RegisterFunc.
-func (mock *AuthUseCaseMock) Register(ctx context.Context, req auth.RegisterRequest) (auth.AuthResponse, error) {
-	callInfo := struct {
-		Ctx context.Context
-		Req auth.RegisterRequest
-	}{
-		Ctx: ctx,
-		Req: req,
-	}
-	mock.lockRegister.Lock()
-	mock.calls.Register = append(mock.calls.Register, callInfo)
-	mock.lockRegister.Unlock()
-	if mock.RegisterFunc == nil {
-		var (
-			authResponseOut auth.AuthResponse
-			errOut          error
-		)
-		return authResponseOut, errOut
-	}
-	return mock.RegisterFunc(ctx, req)
-}
-
-// RegisterCalls gets all the calls that were made to Register.
-// Check the length with:
-//
-//	len(mockedAuthUseCase.RegisterCalls())
-func (mock *AuthUseCaseMock) RegisterCalls() []struct {
-	Ctx context.Context
-	Req auth.RegisterRequest
-} {
-	var calls []struct {
-		Ctx context.Context
-		Req auth.RegisterRequest
-	}
-	mock.lockRegister.RLock()
-	calls = mock.calls.Register
-	mock.lockRegister.RUnlock()
 	return calls
 }

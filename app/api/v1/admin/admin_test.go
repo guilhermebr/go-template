@@ -36,7 +36,7 @@ func TestAdminLogin_Success_Admin(t *testing.T) {
 		},
 	}
 	jh := newTestJWT()
-	ah := NewAdminHandler(uc, &mocks.UserUseCaseMock{}, jh, apiMiddleware.NewAuthMiddleware(jh))
+	ah := NewAdminHandler(uc, &mocks.UserUseCaseMock{}, &mocks.SettingsUseCaseMock{}, jh, apiMiddleware.NewAuthMiddleware(jh))
 
 	body, _ := json.Marshal(AdminLoginRequest{Email: "admin@x.com", Password: "pwd"})
 	req := httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewBuffer(body))
@@ -68,7 +68,7 @@ func TestAdminLogin_Forbidden_NonAdmin(t *testing.T) {
 		},
 	}
 	jh := newTestJWT()
-	h := NewAdminHandler(uc, &mocks.UserUseCaseMock{}, jh, apiMiddleware.NewAuthMiddleware(jh))
+	h := NewAdminHandler(uc, &mocks.UserUseCaseMock{}, &mocks.SettingsUseCaseMock{}, jh, apiMiddleware.NewAuthMiddleware(jh))
 
 	body, _ := json.Marshal(AdminLoginRequest{Email: "user@x.com", Password: "pwd"})
 	req := httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewBuffer(body))
@@ -83,7 +83,7 @@ func TestAdminLogin_Forbidden_NonAdmin(t *testing.T) {
 func TestAdminLogin_BadJSON(t *testing.T) {
 	uc := &mocks.AuthUseCaseMock{}
 	jh := newTestJWT()
-	h := NewAdminHandler(uc, &mocks.UserUseCaseMock{}, jh, apiMiddleware.NewAuthMiddleware(jh))
+	h := NewAdminHandler(uc, &mocks.UserUseCaseMock{}, &mocks.SettingsUseCaseMock{}, jh, apiMiddleware.NewAuthMiddleware(jh))
 
 	req := httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewBufferString("{"))
 	w := httptest.NewRecorder()
@@ -97,7 +97,7 @@ func TestAdminLogin_BadJSON(t *testing.T) {
 func TestAdminLogin_ValidationFailed(t *testing.T) {
 	uc := &mocks.AuthUseCaseMock{}
 	jh := newTestJWT()
-	h := NewAdminHandler(uc, &mocks.UserUseCaseMock{}, jh, apiMiddleware.NewAuthMiddleware(jh))
+	h := NewAdminHandler(uc, &mocks.UserUseCaseMock{}, &mocks.SettingsUseCaseMock{}, jh, apiMiddleware.NewAuthMiddleware(jh))
 
 	// invalid email and missing password
 	body, _ := json.Marshal(AdminLoginRequest{Email: "not-an-email"})
@@ -117,7 +117,7 @@ func TestAdminLogin_AuthFailed(t *testing.T) {
 		},
 	}
 	jh := newTestJWT()
-	h := NewAdminHandler(uc, &mocks.UserUseCaseMock{}, jh, apiMiddleware.NewAuthMiddleware(jh))
+	h := NewAdminHandler(uc, &mocks.UserUseCaseMock{}, &mocks.SettingsUseCaseMock{}, jh, apiMiddleware.NewAuthMiddleware(jh))
 
 	body, _ := json.Marshal(AdminLoginRequest{Email: "admin@x.com", Password: "pwd"})
 	req := httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewBuffer(body))
@@ -133,12 +133,10 @@ func TestVerifyAdminToken_Success(t *testing.T) {
 	jh := newTestJWT()
 	// Generate a real token and parse claims so ExpiresAt is populated
 	tok, _ := jh.GenerateToken("u1", "a@b.com", entities.AccountTypeAdmin.String())
-	claims, _ := jh.ValidateToken(tok)
-	h := NewAdminHandler(&mocks.AuthUseCaseMock{}, &mocks.UserUseCaseMock{}, jh, apiMiddleware.NewAuthMiddleware(jh))
+	h := NewAdminHandler(&mocks.AuthUseCaseMock{}, &mocks.UserUseCaseMock{}, &mocks.SettingsUseCaseMock{}, jh, apiMiddleware.NewAuthMiddleware(jh))
 
 	req := httptest.NewRequest(http.MethodGet, "/auth/verify", nil)
-	ctx := context.WithValue(req.Context(), apiMiddleware.UserContextKey, claims)
-	req = req.WithContext(ctx)
+	req.Header.Set("Authorization", "Bearer "+tok)
 	w := httptest.NewRecorder()
 
 	h.VerifyAdminToken(w, req)
@@ -149,7 +147,7 @@ func TestVerifyAdminToken_Success(t *testing.T) {
 
 func TestVerifyAdminToken_Unauthorized(t *testing.T) {
 	jh := newTestJWT()
-	h := NewAdminHandler(&mocks.AuthUseCaseMock{}, &mocks.UserUseCaseMock{}, jh, apiMiddleware.NewAuthMiddleware(jh))
+	h := NewAdminHandler(&mocks.AuthUseCaseMock{}, &mocks.UserUseCaseMock{}, &mocks.SettingsUseCaseMock{}, jh, apiMiddleware.NewAuthMiddleware(jh))
 
 	req := httptest.NewRequest(http.MethodGet, "/auth/verify", nil)
 	w := httptest.NewRecorder()
@@ -162,7 +160,7 @@ func TestVerifyAdminToken_Unauthorized(t *testing.T) {
 
 func TestGetUser_InvalidID(t *testing.T) {
 	jh := newTestJWT()
-	h := NewAdminHandler(&mocks.AuthUseCaseMock{}, &mocks.UserUseCaseMock{}, jh, apiMiddleware.NewAuthMiddleware(jh))
+	h := NewAdminHandler(&mocks.AuthUseCaseMock{}, &mocks.UserUseCaseMock{}, &mocks.SettingsUseCaseMock{}, jh, apiMiddleware.NewAuthMiddleware(jh))
 
 	req := httptest.NewRequest(http.MethodGet, "/users/invalid", nil)
 	w := httptest.NewRecorder()
@@ -185,7 +183,7 @@ func TestGetUser_NotFound(t *testing.T) {
 			return entities.User{}, errors.New("not found")
 		},
 	}
-	h := NewAdminHandler(&mocks.AuthUseCaseMock{}, uc, jh, apiMiddleware.NewAuthMiddleware(jh))
+	h := NewAdminHandler(&mocks.AuthUseCaseMock{}, uc, &mocks.SettingsUseCaseMock{}, jh, apiMiddleware.NewAuthMiddleware(jh))
 
 	uid := uuid.Must(uuid.NewV4())
 	req := httptest.NewRequest(http.MethodGet, "/users/"+uid.String(), nil)
@@ -209,7 +207,7 @@ func TestGetUser_Success(t *testing.T) {
 			return u, nil
 		},
 	}
-	h := NewAdminHandler(&mocks.AuthUseCaseMock{}, uc, jh, apiMiddleware.NewAuthMiddleware(jh))
+	h := NewAdminHandler(&mocks.AuthUseCaseMock{}, uc, &mocks.SettingsUseCaseMock{}, jh, apiMiddleware.NewAuthMiddleware(jh))
 
 	req := httptest.NewRequest(http.MethodGet, "/users/"+u.ID.String(), nil)
 	w := httptest.NewRecorder()
@@ -231,7 +229,7 @@ func TestGetUser_Success(t *testing.T) {
 
 func TestUpdateUser_InvalidID(t *testing.T) {
 	jh := newTestJWT()
-	h := NewAdminHandler(&mocks.AuthUseCaseMock{}, &mocks.UserUseCaseMock{}, jh, apiMiddleware.NewAuthMiddleware(jh))
+	h := NewAdminHandler(&mocks.AuthUseCaseMock{}, &mocks.UserUseCaseMock{}, &mocks.SettingsUseCaseMock{}, jh, apiMiddleware.NewAuthMiddleware(jh))
 
 	req := httptest.NewRequest(http.MethodPut, "/users/invalid", bytes.NewBufferString(`{}`))
 	w := httptest.NewRecorder()
@@ -248,7 +246,7 @@ func TestUpdateUser_InvalidID(t *testing.T) {
 
 func TestUpdateUser_BadJSON(t *testing.T) {
 	jh := newTestJWT()
-	h := NewAdminHandler(&mocks.AuthUseCaseMock{}, &mocks.UserUseCaseMock{}, jh, apiMiddleware.NewAuthMiddleware(jh))
+	h := NewAdminHandler(&mocks.AuthUseCaseMock{}, &mocks.UserUseCaseMock{}, &mocks.SettingsUseCaseMock{}, jh, apiMiddleware.NewAuthMiddleware(jh))
 
 	uID := uuid.Must(uuid.NewV4())
 	req := httptest.NewRequest(http.MethodPut, "/users/"+uID.String(), bytes.NewBufferString("{"))
@@ -266,7 +264,7 @@ func TestUpdateUser_BadJSON(t *testing.T) {
 
 func TestUpdateUser_ValidationFailed(t *testing.T) {
 	jh := newTestJWT()
-	h := NewAdminHandler(&mocks.AuthUseCaseMock{}, &mocks.UserUseCaseMock{}, jh, apiMiddleware.NewAuthMiddleware(jh))
+	h := NewAdminHandler(&mocks.AuthUseCaseMock{}, &mocks.UserUseCaseMock{}, &mocks.SettingsUseCaseMock{}, jh, apiMiddleware.NewAuthMiddleware(jh))
 
 	uID := uuid.Must(uuid.NewV4())
 	// missing required account_type
@@ -292,7 +290,7 @@ func TestUpdateUser_Success(t *testing.T) {
 			return existing, nil
 		},
 	}
-	h := NewAdminHandler(&mocks.AuthUseCaseMock{}, uc, jh, apiMiddleware.NewAuthMiddleware(jh))
+	h := NewAdminHandler(&mocks.AuthUseCaseMock{}, uc, &mocks.SettingsUseCaseMock{}, jh, apiMiddleware.NewAuthMiddleware(jh))
 
 	body, _ := json.Marshal(UpdateUserRequest{Email: "new@x.com", AccountType: entities.AccountTypeSuperAdmin})
 	req := httptest.NewRequest(http.MethodPut, "/users/"+existing.ID.String(), bytes.NewBuffer(body))
@@ -315,7 +313,7 @@ func TestUpdateUser_Success(t *testing.T) {
 
 func TestDeleteUser_InvalidID(t *testing.T) {
 	jh := newTestJWT()
-	h := NewAdminHandler(&mocks.AuthUseCaseMock{}, &mocks.UserUseCaseMock{}, jh, apiMiddleware.NewAuthMiddleware(jh))
+	h := NewAdminHandler(&mocks.AuthUseCaseMock{}, &mocks.UserUseCaseMock{}, &mocks.SettingsUseCaseMock{}, jh, apiMiddleware.NewAuthMiddleware(jh))
 
 	req := httptest.NewRequest(http.MethodDelete, "/users/invalid", nil)
 	w := httptest.NewRecorder()
@@ -332,7 +330,7 @@ func TestDeleteUser_InvalidID(t *testing.T) {
 
 func TestDeleteUser_SelfDelete(t *testing.T) {
 	jh := newTestJWT()
-	h := NewAdminHandler(&mocks.AuthUseCaseMock{}, &mocks.UserUseCaseMock{}, jh, apiMiddleware.NewAuthMiddleware(jh))
+	h := NewAdminHandler(&mocks.AuthUseCaseMock{}, &mocks.UserUseCaseMock{}, &mocks.SettingsUseCaseMock{}, jh, apiMiddleware.NewAuthMiddleware(jh))
 
 	uID := uuid.Must(uuid.NewV4())
 	req := httptest.NewRequest(http.MethodDelete, "/users/"+uID.String(), nil)
@@ -352,7 +350,7 @@ func TestDeleteUser_SelfDelete(t *testing.T) {
 
 func TestDeleteUser_Success(t *testing.T) {
 	jh := newTestJWT()
-	h := NewAdminHandler(&mocks.AuthUseCaseMock{}, &mocks.UserUseCaseMock{}, jh, apiMiddleware.NewAuthMiddleware(jh))
+	h := NewAdminHandler(&mocks.AuthUseCaseMock{}, &mocks.UserUseCaseMock{}, &mocks.SettingsUseCaseMock{}, jh, apiMiddleware.NewAuthMiddleware(jh))
 
 	uID := uuid.Must(uuid.NewV4())
 	req := httptest.NewRequest(http.MethodDelete, "/users/"+uID.String(), nil)
@@ -370,7 +368,7 @@ func TestDeleteUser_Success(t *testing.T) {
 
 func TestMiscEndpoints(t *testing.T) {
 	jh := newTestJWT()
-	h := NewAdminHandler(&mocks.AuthUseCaseMock{}, &mocks.UserUseCaseMock{}, jh, apiMiddleware.NewAuthMiddleware(jh))
+	h := NewAdminHandler(&mocks.AuthUseCaseMock{}, &mocks.UserUseCaseMock{}, &mocks.SettingsUseCaseMock{}, jh, apiMiddleware.NewAuthMiddleware(jh))
 
 	t.Run("DashboardStats", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/dashboard/stats", nil)

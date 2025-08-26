@@ -6,6 +6,7 @@ import (
 	"go-template/domain/entities"
 
 	"github.com/gofrs/uuid/v5"
+	googleUUID "github.com/google/uuid"
 	"github.com/supabase-community/gotrue-go/types"
 
 	"github.com/supabase-community/supabase-go"
@@ -88,4 +89,28 @@ func (p *SupabaseProvider) ValidateToken(ctx context.Context, token string) (*en
 		CreatedAt:      user.CreatedAt,
 		UpdatedAt:      user.UpdatedAt,
 	}, nil
+}
+
+func (p *SupabaseProvider) DeleteUser(ctx context.Context, authProviderID string) error {
+	if p.client == nil {
+		return fmt.Errorf("supabase client not initialized")
+	}
+
+	// Parse the user ID from string to Google UUID (required by Supabase)
+	googleUserID, err := googleUUID.Parse(authProviderID)
+	if err != nil {
+		return fmt.Errorf("invalid user ID format: %w", err)
+	}
+
+	// Delete the user from Supabase
+	// Note: This requires admin privileges and the client must be configured with service role key
+	deleteReq := types.AdminDeleteUserRequest{
+		UserID: googleUserID,
+	}
+	err = p.client.Auth.AdminDeleteUser(deleteReq)
+	if err != nil {
+		return fmt.Errorf("failed to delete user from Supabase: %w", err)
+	}
+
+	return nil
 }

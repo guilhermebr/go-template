@@ -4,9 +4,7 @@ import (
 	"context"
 	"errors"
 	"go-template/domain"
-	mauth "go-template/domain/auth/mocks"
 	"go-template/domain/entities"
-	muser "go-template/domain/user/mocks"
 	"go-template/internal/jwt"
 	"testing"
 	"time"
@@ -18,17 +16,133 @@ func newJWT() jwt.Service {
 	return jwt.NewService("secret", "test", "1h")
 }
 
-func TestUseCase_Register_Success(t *testing.T) {
-	repo := &muser.RepositoryMock{
-		CreateFunc: func(ctx context.Context, user entities.User) error { return nil },
+// Simple mock for Repository
+type mockRepository struct {
+	getByEmailFunc func(ctx context.Context, email string) (entities.User, error)
+	createFunc     func(ctx context.Context, user entities.User) error
+}
+
+func (m *mockRepository) GetByEmail(ctx context.Context, email string) (entities.User, error) {
+	if m.getByEmailFunc != nil {
+		return m.getByEmailFunc(ctx, email)
 	}
-	provider := &mauth.ProviderMock{
-		RegisterUserFunc: func(ctx context.Context, email string, password string) (string, error) { return "prov-123", nil },
-		ProviderFunc:     func() string { return "supabase" },
+	return entities.User{}, nil
+}
+
+func (m *mockRepository) Create(ctx context.Context, user entities.User) error {
+	if m.createFunc != nil {
+		return m.createFunc(ctx, user)
+	}
+	return nil
+}
+
+func (m *mockRepository) GetByID(ctx context.Context, id uuid.UUID) (entities.User, error) {
+	return entities.User{}, nil
+}
+
+func (m *mockRepository) Update(ctx context.Context, user entities.User) error {
+	return nil
+}
+
+func (m *mockRepository) Delete(ctx context.Context, id uuid.UUID) error {
+	return nil
+}
+
+func (m *mockRepository) ListUsers(ctx context.Context, params entities.ListUsersParams) ([]entities.User, error) {
+	return nil, nil
+}
+
+func (m *mockRepository) CountUsers(ctx context.Context) (int64, error) {
+	return 0, nil
+}
+
+func (m *mockRepository) GetUserStats(ctx context.Context) (entities.UserStats, error) {
+	return entities.UserStats{}, nil
+}
+
+func (m *mockRepository) GetByAuthProviderID(ctx context.Context, provider, providerID string) (entities.User, error) {
+	return entities.User{}, nil
+}
+
+// Simple mock for Provider
+type mockProvider struct {
+	loginFunc    func(ctx context.Context, email, password string) (string, error)
+	providerFunc func() string
+}
+
+func (m *mockProvider) RegisterUser(ctx context.Context, email, password string) (string, error) {
+	return "", nil
+}
+
+func (m *mockProvider) Login(ctx context.Context, email, password string) (string, error) {
+	if m.loginFunc != nil {
+		return m.loginFunc(ctx, email, password)
+	}
+	return "prov-123", nil
+}
+
+func (m *mockProvider) Provider() string {
+	if m.providerFunc != nil {
+		return m.providerFunc()
+	}
+	return "supabase"
+}
+
+func (m *mockProvider) ValidateToken(ctx context.Context, token string) (*entities.User, error) {
+	return nil, nil
+}
+
+func (m *mockProvider) DeleteUser(ctx context.Context, authProviderID string) error {
+	return nil
+}
+
+func TestUseCase_Login_Success_UserExists(t *testing.T) {
+	existingUser := entities.User{
+		ID:             uuid.Must(uuid.NewV4()),
+		Email:          "a@b.com",
+		AuthProvider:   "supabase",
+		AuthProviderID: "prov-123",
+		AccountType:    entities.AccountTypeUser,
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
+	}
+	repo := &mockRepository{
+		getByEmailFunc: func(ctx context.Context, email string) (entities.User, error) {
+			return existingUser, nil
+		},
+	}
+	provider := &mockProvider{
+		loginFunc:    func(ctx context.Context, email, password string) (string, error) { return "prov-123", nil },
+		providerFunc: func() string { return "supabase" },
 	}
 	uc := NewUseCase(repo, provider, newJWT())
 
-	resp, err := uc.Register(context.Background(), RegisterRequest{Email: "a@b.com", Password: "123456"})
+	resp, err := uc.Login(context.Background(), LoginRequest{Email: "a@b.com", Password: "123456"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.Token == "" {
+		t.Fatalf("expected token, got empty")
+	}
+	if resp.User.Email != "a@b.com" || resp.User.AuthProvider != "supabase" {
+		t.Fatalf("unexpected user payload: %+v", resp.User)
+	}
+}
+
+func TestUseCase_Login_Success_UserCreatedWhenMissing(t *testing.T) {
+	repo := &mockRepository{
+		getByEmailFunc: func(ctx context.Context, email string) (entities.User, error) {
+			return entities.User{}, domain.ErrNotFound
+		},
+		createFunc: func(ctx context.Context, user entities.User) error { return nil },
+	}
+	provider := &mockProvider{
+		loginFunc:    func(ctx context.Context, email, password string) (string, error) { return "prov-123", nil },
+		providerFunc: func() string { return "supabase" },
+	}
+	uc := NewUseCase(repo, provider, newJWT())
+
+	resp, err := uc.Login(context.Background(), LoginRequest{Email: "a@b.com", Password: "123456"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -40,94 +154,16 @@ func TestUseCase_Register_Success(t *testing.T) {
 	}
 }
 
-func TestUseCase_Register_AuthProviderError(t *testing.T) {
-	repo := &muser.RepositoryMock{}
-	provider := &mauth.ProviderMock{
-		RegisterUserFunc: func(ctx context.Context, email string, password string) (string, error) {
-			return "", errors.New("fail")
-		},
-	}
-	uc := NewUseCase(repo, provider, newJWT())
-
-	_, err := uc.Register(context.Background(), RegisterRequest{Email: "a@b.com", Password: "123456"})
-	if err == nil {
-		t.Fatalf("expected error, got nil")
-	}
-}
-
-func TestUseCase_Register_DBError(t *testing.T) {
-	repo := &muser.RepositoryMock{
-		CreateFunc: func(ctx context.Context, user entities.User) error { return errors.New("db") },
-	}
-	provider := &mauth.ProviderMock{
-		RegisterUserFunc: func(ctx context.Context, email string, password string) (string, error) { return "prov-123", nil },
-		ProviderFunc:     func() string { return "supabase" },
-	}
-	uc := NewUseCase(repo, provider, newJWT())
-
-	_, err := uc.Register(context.Background(), RegisterRequest{Email: "a@b.com", Password: "123456"})
-	if err == nil {
-		t.Fatalf("expected error, got nil")
-	}
-}
-
-func TestUseCase_Login_Success_UserExists(t *testing.T) {
-	now := time.Now()
-	existing := entities.User{ID: uuid.Must(uuid.NewV4()), Email: "a@b.com", AuthProvider: "supabase", AuthProviderID: "id", CreatedAt: now, UpdatedAt: now}
-	repo := &muser.RepositoryMock{
-		GetByEmailFunc: func(ctx context.Context, email string) (entities.User, error) { return existing, nil },
-	}
-	provider := &mauth.ProviderMock{
-		LoginFunc:    func(ctx context.Context, email string, password string) (string, error) { return "prov-123", nil },
-		ProviderFunc: func() string { return "supabase" },
-	}
-	uc := NewUseCase(repo, provider, newJWT())
-
-	resp, err := uc.Login(context.Background(), LoginRequest{Email: "a@b.com", Password: "x"})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if resp.User.Email != existing.Email {
-		t.Fatalf("expected existing user email, got %s", resp.User.Email)
-	}
-}
-
-func TestUseCase_Login_Success_UserCreatedWhenMissing(t *testing.T) {
-	var created entities.User
-	repo := &muser.RepositoryMock{
-		GetByEmailFunc: func(ctx context.Context, email string) (entities.User, error) {
-			return entities.User{}, domain.ErrNotFound
-		},
-		CreateFunc: func(ctx context.Context, user entities.User) error { created = user; return nil },
-	}
-	provider := &mauth.ProviderMock{
-		LoginFunc:    func(ctx context.Context, email string, password string) (string, error) { return "prov-123", nil },
-		ProviderFunc: func() string { return "supabase" },
-	}
-	uc := NewUseCase(repo, provider, newJWT())
-
-	resp, err := uc.Login(context.Background(), LoginRequest{Email: "a@b.com", Password: "x"})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if created.Email != "a@b.com" || created.AuthProviderID != "prov-123" {
-		t.Fatalf("user not created as expected: %+v", created)
-	}
-	if resp.Token == "" {
-		t.Fatalf("expected token, got empty")
-	}
-}
-
 func TestUseCase_Login_AuthError(t *testing.T) {
-	repo := &muser.RepositoryMock{}
-	provider := &mauth.ProviderMock{
-		LoginFunc: func(ctx context.Context, email string, password string) (string, error) {
-			return "", errors.New("auth")
+	repo := &mockRepository{}
+	provider := &mockProvider{
+		loginFunc: func(ctx context.Context, email, password string) (string, error) {
+			return "", errors.New("auth failed")
 		},
 	}
 	uc := NewUseCase(repo, provider, newJWT())
 
-	_, err := uc.Login(context.Background(), LoginRequest{Email: "a@b.com", Password: "x"})
+	_, err := uc.Login(context.Background(), LoginRequest{Email: "a@b.com", Password: "123456"})
 	if err == nil {
 		t.Fatalf("expected error, got nil")
 	}

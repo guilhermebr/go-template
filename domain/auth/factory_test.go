@@ -4,16 +4,19 @@ import (
 	"testing"
 )
 
-func TestNewAuthProvider_Supabase_Success(t *testing.T) {
-	cfg := AuthConfig{
-		Provider: "supabase",
-		Supabase: SupabaseConfig{
-			URL:    "http://localhost:54321",
-			APIKey: "test-api-key",
+func TestProviderFactory_CreateProvider_Supabase_Success(t *testing.T) {
+	configs := map[string]AuthConfig{
+		"supabase": {
+			Provider: "supabase",
+			Supabase: SupabaseConfig{
+				URL:    "http://localhost:54321",
+				APIKey: "test-api-key",
+			},
 		},
 	}
 
-	p, err := NewAuthProvider(cfg)
+	factory := NewProviderFactory(configs)
+	p, err := factory.CreateProvider("supabase")
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -25,23 +28,55 @@ func TestNewAuthProvider_Supabase_Success(t *testing.T) {
 	}
 }
 
-func TestNewAuthProvider_Supabase_MissingConfig(t *testing.T) {
-	cases := []AuthConfig{
-		{Provider: "supabase", Supabase: SupabaseConfig{URL: "", APIKey: "k"}},
-		{Provider: "supabase", Supabase: SupabaseConfig{URL: "u", APIKey: ""}},
-		{Provider: "supabase", Supabase: SupabaseConfig{}},
+func TestProviderFactory_CreateProvider_Supabase_MissingConfig(t *testing.T) {
+	configs := []map[string]AuthConfig{
+		{"supabase": {Provider: "supabase", Supabase: SupabaseConfig{URL: "", APIKey: "k"}}},
+		{"supabase": {Provider: "supabase", Supabase: SupabaseConfig{URL: "u", APIKey: ""}}},
+		{"supabase": {Provider: "supabase", Supabase: SupabaseConfig{}}},
 	}
 
-	for _, cfg := range cases {
-		if _, err := NewAuthProvider(cfg); err == nil {
+	for _, configMap := range configs {
+		factory := NewProviderFactory(configMap)
+		if _, err := factory.CreateProvider("supabase"); err == nil {
 			t.Fatalf("expected error for missing supabase config, got nil")
 		}
 	}
 }
 
-func TestNewAuthProvider_Unsupported(t *testing.T) {
-	cfg := AuthConfig{Provider: "unknown"}
-	if _, err := NewAuthProvider(cfg); err == nil {
+func TestProviderFactory_CreateProvider_Unsupported(t *testing.T) {
+	configs := map[string]AuthConfig{
+		"supabase": {
+			Provider: "supabase",
+			Supabase: SupabaseConfig{
+				URL:    "http://localhost:54321",
+				APIKey: "test-api-key",
+			},
+		},
+	}
+
+	factory := NewProviderFactory(configs)
+	if _, err := factory.CreateProvider("unknown"); err == nil {
 		t.Fatalf("expected error for unsupported provider, got nil")
+	}
+}
+
+func TestProviderFactory_GetSupportedProviders(t *testing.T) {
+	configs := map[string]AuthConfig{
+		"supabase": {
+			Provider: "supabase",
+			Supabase: SupabaseConfig{
+				URL:    "http://localhost:54321",
+				APIKey: "test-api-key",
+			},
+		},
+	}
+
+	factory := NewProviderFactory(configs)
+	providers := factory.GetSupportedProviders()
+	if len(providers) != 1 {
+		t.Fatalf("expected 1 provider, got %d", len(providers))
+	}
+	if providers[0] != "supabase" {
+		t.Fatalf("expected 'supabase', got %q", providers[0])
 	}
 }

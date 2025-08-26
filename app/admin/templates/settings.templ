@@ -1,0 +1,348 @@
+package templates
+
+import "fmt"
+import "go-template/domain/entities"
+import "go-template/internal/types"
+
+templ Settings(user *entities.User, settings *types.SystemSettings) {
+	@Layout("System Settings", user) {
+		<!-- Page header -->
+		<div class="mb-8">
+			<h1 class="text-2xl font-bold text-gray-900">System Settings</h1>
+			<p class="mt-1 text-sm text-gray-500">
+				Configure system-wide preferences and security settings.
+			</p>
+		</div>
+
+		<form method="POST" action="/settings" class="space-y-8">
+			<!-- General Settings -->
+			<div class="bg-white shadow rounded-lg">
+				<div class="px-4 py-5 sm:p-6">
+					<h3 class="text-lg font-medium leading-6 text-gray-900">General Settings</h3>
+					<div class="mt-2 max-w-xl text-sm text-gray-500">
+						<p>Basic system configuration options.</p>
+					</div>
+
+					<div class="mt-6 space-y-6">
+						<!-- Maintenance Mode -->
+						<div class="flex items-start">
+							<div class="flex items-center h-5">
+								<input id="maintenance_mode" 
+									   name="maintenance_mode" 
+									   type="checkbox"
+									   if settings != nil && settings.MaintenanceMode {
+									   	   checked
+									   }
+									   class="focus:ring-admin-500 h-4 w-4 text-admin-600 border-gray-300 rounded"/>
+							</div>
+							<div class="ml-3 text-sm">
+								<label for="maintenance_mode" class="font-medium text-gray-700">
+									Maintenance Mode
+								</label>
+								<p class="text-gray-500">When enabled, the system will be in maintenance mode and users will see a maintenance page.</p>
+							</div>
+						</div>
+
+						<!-- Registration Enabled -->
+						<div class="flex items-start">
+							<div class="flex items-center h-5">
+								<input id="registration_enabled" 
+									   name="registration_enabled" 
+									   type="checkbox"
+									   if settings != nil && settings.RegistrationEnabled {
+									   	   checked
+									   }
+									   class="focus:ring-admin-500 h-4 w-4 text-admin-600 border-gray-300 rounded"/>
+							</div>
+							<div class="ml-3 text-sm">
+								<label for="registration_enabled" class="font-medium text-gray-700">
+									User Registration
+								</label>
+								<p class="text-gray-500">Allow new users to register for accounts.</p>
+							</div>
+						</div>
+
+						<!-- Email Notifications -->
+						<div class="flex items-start">
+							<div class="flex items-center h-5">
+								<input id="email_notifications" 
+									   name="email_notifications" 
+									   type="checkbox"
+									   if settings != nil && settings.EmailNotifications {
+									   	   checked
+									   }
+									   class="focus:ring-admin-500 h-4 w-4 text-admin-600 border-gray-300 rounded"/>
+							</div>
+							<div class="ml-3 text-sm">
+								<label for="email_notifications" class="font-medium text-gray-700">
+									Email Notifications
+								</label>
+								<p class="text-gray-500">Send email notifications for important system events.</p>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<!-- Authentication Providers -->
+			<div class="bg-white shadow rounded-lg">
+				<div class="px-4 py-5 sm:p-6">
+					<h3 class="text-lg font-medium leading-6 text-gray-900">Authentication Providers</h3>
+					<div class="mt-2 max-w-xl text-sm text-gray-500">
+						<p>Configure available authentication providers for user creation.</p>
+					</div>
+
+					<div class="mt-6 space-y-6">
+						<!-- Default Auth Provider -->
+						<div>
+							<label for="default_auth_provider" class="block text-sm font-medium text-gray-700">
+								Default Authentication Provider
+							</label>
+							<div class="mt-1">
+								<select id="default_auth_provider" 
+										name="default_auth_provider"
+										class="shadow-sm focus:ring-admin-500 focus:border-admin-500 block w-full sm:text-sm border-gray-300 rounded-md">
+									<option value="supabase"
+										if settings != nil && settings.DefaultAuthProvider == "supabase" {
+											selected
+										}>Supabase</option>
+								</select>
+							</div>
+							<p class="mt-2 text-sm text-gray-500">Default provider used when creating new users through the admin interface.</p>
+						</div>
+
+						<!-- Available Auth Providers -->
+						<div>
+							<fieldset>
+								<legend class="text-sm font-medium text-gray-700">Available Providers</legend>
+								<div class="mt-2 space-y-2">
+									<div class="flex items-start">
+										<div class="flex items-center h-5">
+											<input id="provider_supabase" 
+												   name="available_auth_providers" 
+												   value="supabase"
+												   type="checkbox"
+												   checked
+												   class="focus:ring-admin-500 h-4 w-4 text-admin-600 border-gray-300 rounded"/>
+										</div>
+										<div class="ml-3 text-sm">
+											<label for="provider_supabase" class="font-medium text-gray-700">
+												Supabase
+											</label>
+											<p class="text-gray-500">Supabase authentication service</p>
+										</div>
+									</div>
+									<!-- Future providers can be added here -->
+								</div>
+							</fieldset>
+							<p class="mt-2 text-sm text-gray-500">Select which authentication providers are available for creating users.</p>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<!-- Security Settings -->
+			<div class="bg-white shadow rounded-lg">
+				<div class="px-4 py-5 sm:p-6">
+					<h3 class="text-lg font-medium leading-6 text-gray-900">Security Settings</h3>
+					<div class="mt-2 max-w-xl text-sm text-gray-500">
+						<p>Security and access control configuration.</p>
+					</div>
+
+					<div class="mt-6 space-y-6">
+						<!-- Session Timeout -->
+						<div>
+							<label for="session_timeout" class="block text-sm font-medium text-gray-700">
+								Session Timeout (minutes)
+							</label>
+							<div class="mt-1">
+								<input type="number" 
+									   id="session_timeout" 
+									   name="session_timeout"
+									   if settings != nil {
+									   	   value={ fmt.Sprintf("%d", settings.SessionTimeout) }
+									   } else {
+									   	   value="1440"
+									   }
+									   min="15"
+									   max="10080"
+									   class="shadow-sm focus:ring-admin-500 focus:border-admin-500 block w-full sm:text-sm border-gray-300 rounded-md"/>
+							</div>
+							<p class="mt-2 text-sm text-gray-500">How long user sessions remain active without activity.</p>
+						</div>
+
+						<!-- Password Policy -->
+						<div>
+							<label for="min_password_length" class="block text-sm font-medium text-gray-700">
+								Minimum Password Length
+							</label>
+							<div class="mt-1">
+								<input type="number" 
+									   id="min_password_length" 
+									   name="min_password_length"
+									   if settings != nil {
+									   	   value={ fmt.Sprintf("%d", settings.MinPasswordLength) }
+									   } else {
+									   	   value="8"
+									   }
+									   min="6"
+									   max="128"
+									   class="shadow-sm focus:ring-admin-500 focus:border-admin-500 block w-full sm:text-sm border-gray-300 rounded-md"/>
+							</div>
+							<p class="mt-2 text-sm text-gray-500">Minimum number of characters required for user passwords.</p>
+						</div>
+
+						<!-- Two-Factor Authentication -->
+						<div class="flex items-start">
+							<div class="flex items-center h-5">
+								<input id="require_2fa" 
+									   name="require_2fa" 
+									   type="checkbox"
+									   if settings != nil && settings.Require2FA {
+									   	   checked
+									   }
+									   class="focus:ring-admin-500 h-4 w-4 text-admin-600 border-gray-300 rounded"/>
+							</div>
+							<div class="ml-3 text-sm">
+								<label for="require_2fa" class="font-medium text-gray-700">
+									Require Two-Factor Authentication
+								</label>
+								<p class="text-gray-500">Require all admin users to enable two-factor authentication.</p>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<!-- Backup & Data -->
+			<div class="bg-white shadow rounded-lg">
+				<div class="px-4 py-5 sm:p-6">
+					<h3 class="text-lg font-medium leading-6 text-gray-900">Backup & Data Management</h3>
+					<div class="mt-2 max-w-xl text-sm text-gray-500">
+						<p>Data backup and retention settings.</p>
+					</div>
+
+					<div class="mt-6 space-y-6">
+						<!-- Auto Backup -->
+						<div class="flex items-start">
+							<div class="flex items-center h-5">
+								<input id="auto_backup" 
+									   name="auto_backup" 
+									   type="checkbox"
+									   if settings != nil && settings.AutoBackup {
+									   	   checked
+									   } else if settings == nil {
+									   	   checked
+									   }
+									   class="focus:ring-admin-500 h-4 w-4 text-admin-600 border-gray-300 rounded"/>
+							</div>
+							<div class="ml-3 text-sm">
+								<label for="auto_backup" class="font-medium text-gray-700">
+									Automatic Backups
+								</label>
+								<p class="text-gray-500">Automatically create database backups daily.</p>
+							</div>
+						</div>
+
+						<!-- Backup Retention -->
+						<div>
+							<label for="backup_retention_days" class="block text-sm font-medium text-gray-700">
+								Backup Retention (days)
+							</label>
+							<div class="mt-1">
+								<input type="number" 
+									   id="backup_retention_days" 
+									   name="backup_retention_days"
+									   if settings != nil {
+									   	   value={ fmt.Sprintf("%d", settings.BackupRetentionDays) }
+									   } else {
+									   	   value="30"
+									   }
+									   min="1"
+									   max="365"
+									   class="shadow-sm focus:ring-admin-500 focus:border-admin-500 block w-full sm:text-sm border-gray-300 rounded-md"/>
+							</div>
+							<p class="mt-2 text-sm text-gray-500">How many days to keep backup files before automatic deletion.</p>
+						</div>
+
+						<!-- Manual Backup -->
+						<div class="pt-4 border-t border-gray-200">
+							<button type="button" 
+									onclick="createBackup()"
+									class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-admin-500">
+								<svg class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/>
+								</svg>
+								Create Backup Now
+							</button>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<!-- System Information -->
+			<div class="bg-white shadow rounded-lg">
+				<div class="px-4 py-5 sm:p-6">
+					<h3 class="text-lg font-medium leading-6 text-gray-900">System Information</h3>
+					<div class="mt-6">
+						<dl class="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
+							<div>
+								<dt class="text-sm font-medium text-gray-500">System Version</dt>
+								<dd class="mt-1 text-sm text-gray-900">v1.0.0</dd>
+							</div>
+							<div>
+								<dt class="text-sm font-medium text-gray-500">Last Updated</dt>
+								<dd class="mt-1 text-sm text-gray-900">2024-01-15</dd>
+							</div>
+							<div>
+								<dt class="text-sm font-medium text-gray-500">Database Version</dt>
+								<dd class="mt-1 text-sm text-gray-900">PostgreSQL 15.0</dd>
+							</div>
+							<div>
+								<dt class="text-sm font-medium text-gray-500">Uptime</dt>
+								<dd class="mt-1 text-sm text-gray-900">7 days, 3 hours</dd>
+							</div>
+							<div>
+								<dt class="text-sm font-medium text-gray-500">Environment</dt>
+								<dd class="mt-1 text-sm text-gray-900">
+									<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+										Development
+									</span>
+								</dd>
+							</div>
+							<div>
+								<dt class="text-sm font-medium text-gray-500">Last Backup</dt>
+								<dd class="mt-1 text-sm text-gray-900">2 hours ago</dd>
+							</div>
+						</dl>
+					</div>
+				</div>
+			</div>
+
+			<!-- Save Button -->
+			<div class="flex justify-end">
+				<button type="button" 
+						class="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-admin-500">
+					Cancel
+				</button>
+				<button type="submit" 
+						class="ml-3 inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-admin-600 hover:bg-admin-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-admin-500">
+					Save Settings
+				</button>
+			</div>
+		</form>
+
+		<script>
+			function createBackup() {
+				if (confirm("Create a manual backup now? This may take a few minutes.")) {
+					// Use HTMX to trigger backup
+					htmx.ajax('POST', '/api/backup', {
+						values: {},
+						swap: 'none'
+					});
+					alert("Backup started. You will be notified when it's complete.");
+				}
+			}
+		</script>
+	}
+}

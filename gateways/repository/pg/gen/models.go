@@ -17,7 +17,7 @@ type AccountType string
 const (
 	AccountTypeUser       AccountType = "user"
 	AccountTypeAdmin      AccountType = "admin"
-	AccountTypeSuperadmin AccountType = "superadmin"
+	AccountTypeSuperAdmin AccountType = "super_admin"
 )
 
 func (e *AccountType) Scan(src interface{}) error {
@@ -53,6 +53,13 @@ func (ns NullAccountType) Value() (driver.Value, error) {
 		return nil, nil
 	}
 	return string(ns.AccountType), nil
+}
+
+type AdminSetting struct {
+	Key       string     `json:"key"`
+	Value     []byte     `json:"value"`
+	CreatedAt *time.Time `json:"createdAt"`
+	UpdatedAt *time.Time `json:"updatedAt"`
 }
 
 type Example struct {

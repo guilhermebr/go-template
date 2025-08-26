@@ -15,6 +15,9 @@ import (
 //
 //		// make and configure a mocked auth.Provider
 //		mockedProvider := &ProviderMock{
+//			DeleteUserFunc: func(ctx context.Context, authProviderID string) error {
+//				panic("mock out the DeleteUser method")
+//			},
 //			LoginFunc: func(ctx context.Context, email string, password string) (string, error) {
 //				panic("mock out the Login method")
 //			},
@@ -34,6 +37,9 @@ import (
 //
 //	}
 type ProviderMock struct {
+	// DeleteUserFunc mocks the DeleteUser method.
+	DeleteUserFunc func(ctx context.Context, authProviderID string) error
+
 	// LoginFunc mocks the Login method.
 	LoginFunc func(ctx context.Context, email string, password string) (string, error)
 
@@ -48,6 +54,13 @@ type ProviderMock struct {
 
 	// calls tracks calls to the methods.
 	calls struct {
+		// DeleteUser holds details about calls to the DeleteUser method.
+		DeleteUser []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// AuthProviderID is the authProviderID argument value.
+			AuthProviderID string
+		}
 		// Login holds details about calls to the Login method.
 		Login []struct {
 			// Ctx is the ctx argument value.
@@ -77,10 +90,50 @@ type ProviderMock struct {
 			Token string
 		}
 	}
+	lockDeleteUser    sync.RWMutex
 	lockLogin         sync.RWMutex
 	lockProvider      sync.RWMutex
 	lockRegisterUser  sync.RWMutex
 	lockValidateToken sync.RWMutex
+}
+
+// DeleteUser calls DeleteUserFunc.
+func (mock *ProviderMock) DeleteUser(ctx context.Context, authProviderID string) error {
+	callInfo := struct {
+		Ctx            context.Context
+		AuthProviderID string
+	}{
+		Ctx:            ctx,
+		AuthProviderID: authProviderID,
+	}
+	mock.lockDeleteUser.Lock()
+	mock.calls.DeleteUser = append(mock.calls.DeleteUser, callInfo)
+	mock.lockDeleteUser.Unlock()
+	if mock.DeleteUserFunc == nil {
+		var (
+			errOut error
+		)
+		return errOut
+	}
+	return mock.DeleteUserFunc(ctx, authProviderID)
+}
+
+// DeleteUserCalls gets all the calls that were made to DeleteUser.
+// Check the length with:
+//
+//	len(mockedProvider.DeleteUserCalls())
+func (mock *ProviderMock) DeleteUserCalls() []struct {
+	Ctx            context.Context
+	AuthProviderID string
+} {
+	var calls []struct {
+		Ctx            context.Context
+		AuthProviderID string
+	}
+	mock.lockDeleteUser.RLock()
+	calls = mock.calls.DeleteUser
+	mock.lockDeleteUser.RUnlock()
+	return calls
 }
 
 // Login calls LoginFunc.

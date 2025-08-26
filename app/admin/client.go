@@ -2,23 +2,23 @@ package admin
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"go-template/domain/entities"
+	"go-template/internal/types"
 	"io"
 	"net/http"
 	"time"
 )
 
-type AdminClient struct {
+type Client struct {
 	baseURL    string
 	httpClient *http.Client
-	token      string
+	authToken  string
 }
 
-func NewAdminClient(baseURL string) *AdminClient {
-	return &AdminClient{
+func NewClient(baseURL string) *Client {
+	return &Client{
 		baseURL: baseURL,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
@@ -26,8 +26,58 @@ func NewAdminClient(baseURL string) *AdminClient {
 	}
 }
 
-func (c *AdminClient) SetToken(token string) {
-	c.token = token
+func (c *Client) SetAuthToken(token string) {
+	c.authToken = token
+}
+
+func (c *Client) doRequest(method, endpoint string, body interface{}, result interface{}) error {
+	var reqBody io.Reader
+	if body != nil {
+		jsonData, err := json.Marshal(body)
+		if err != nil {
+			return fmt.Errorf("marshaling request body: %w", err)
+		}
+		reqBody = bytes.NewBuffer(jsonData)
+	}
+
+	req, err := http.NewRequest(method, c.baseURL+endpoint, reqBody)
+	if err != nil {
+		return fmt.Errorf("creating request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	if c.authToken != "" {
+		req.Header.Set("Authorization", "Bearer "+c.authToken)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("executing request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	if resp.StatusCode >= 400 {
+		var errorResp map[string]string
+		if err := json.Unmarshal(respBody, &errorResp); err == nil {
+			if errorMsg, exists := errorResp["error"]; exists {
+				return fmt.Errorf("API error (%d): %s", resp.StatusCode, errorMsg)
+			}
+		}
+		return fmt.Errorf("API error (%d): %s", resp.StatusCode, string(respBody))
+	}
+
+	if result != nil {
+		if err := json.Unmarshal(respBody, result); err != nil {
+			return fmt.Errorf("unmarshaling response: %w", err)
+		}
+	}
+
+	return nil
 }
 
 // Auth endpoints
@@ -43,247 +93,122 @@ type LoginResponse struct {
 	ExpiresAt   time.Time     `json:"expires_at"`
 }
 
-func (c *AdminClient) Login(ctx context.Context, req LoginRequest) (*LoginResponse, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshaling request: %w", err)
-	}
-
-	resp, err := c.makeRequest(ctx, "POST", "/admin/v1/auth/login", bytes.NewReader(body), false)
-	if err != nil {
+func (c *Client) AdminLogin(email, password string) (*LoginResponse, error) {
+	req := LoginRequest{Email: email, Password: password}
+	var resp LoginResponse
+	
+	if err := c.doRequest("POST", "/admin/v1/login", req, &resp); err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, c.parseError(resp)
-	}
-
-	var response LoginResponse
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return nil, fmt.Errorf("decoding response: %w", err)
-	}
-
-	return &response, nil
+	
+	return &resp, nil
 }
 
-func (c *AdminClient) Logout(ctx context.Context) error {
-	resp, err := c.makeRequest(ctx, "POST", "/admin/v1/auth/logout", nil, true)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return c.parseError(resp)
-	}
-
-	return nil
+func (c *Client) AdminLogout() error {
+	return c.doRequest("POST", "/admin/v1/logout", nil, nil)
 }
 
-// Dashboard stats
-type DashboardStats struct {
-	TotalUsers     int64 `json:"total_users"`
-	AdminUsers     int64 `json:"admin_users"`
-	ActiveSessions int64 `json:"active_sessions"`
-	SystemAlerts   int64 `json:"system_alerts"`
+func (c *Client) VerifyToken() error {
+	return c.doRequest("GET", "/admin/v1/verify", nil, nil)
 }
 
-func (c *AdminClient) GetDashboardStats(ctx context.Context) (*DashboardStats, error) {
-	resp, err := c.makeRequest(ctx, "GET", "/admin/v1/dashboard/stats", nil, true)
-	if err != nil {
+// Dashboard endpoints
+func (c *Client) GetDashboardStats() (*types.DashboardStats, error) {
+	var stats types.DashboardStats
+	if err := c.doRequest("GET", "/admin/v1/dashboard/stats", nil, &stats); err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, c.parseError(resp)
-	}
-
-	var stats DashboardStats
-	if err := json.NewDecoder(resp.Body).Decode(&stats); err != nil {
-		return nil, fmt.Errorf("decoding response: %w", err)
-	}
-
 	return &stats, nil
 }
 
-// User management
-type UserListResponse struct {
-	Users      []entities.User `json:"users"`
-	Total      int64           `json:"total"`
-	Page       int             `json:"page"`
-	PageSize   int             `json:"page_size"`
-	TotalPages int             `json:"total_pages"`
-}
-
-func (c *AdminClient) ListUsers(ctx context.Context, page, pageSize int) (*UserListResponse, error) {
-	url := fmt.Sprintf("/admin/v1/users?page=%d&page_size=%d", page, pageSize)
-	resp, err := c.makeRequest(ctx, "GET", url, nil, true)
-	if err != nil {
+// User management endpoints
+func (c *Client) ListUsers(page, pageSize int) (*types.UserListResponse, error) {
+	endpoint := fmt.Sprintf("/admin/v1/users?page=%d&page_size=%d", page, pageSize)
+	var resp types.UserListResponse
+	if err := c.doRequest("GET", endpoint, nil, &resp); err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, c.parseError(resp)
-	}
-
-	var response UserListResponse
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return nil, fmt.Errorf("decoding response: %w", err)
-	}
-
-	return &response, nil
+	return &resp, nil
 }
 
-func (c *AdminClient) GetUser(ctx context.Context, userID string) (*entities.User, error) {
-	url := fmt.Sprintf("/admin/v1/users/%s", userID)
-	resp, err := c.makeRequest(ctx, "GET", url, nil, true)
-	if err != nil {
+func (c *Client) ListUsersWithFilter(page, pageSize int, search, accountType string) (*types.UserListResponse, error) {
+	endpoint := fmt.Sprintf("/admin/v1/users?page=%d&page_size=%d", page, pageSize)
+	
+	if search != "" {
+		endpoint += fmt.Sprintf("&search=%s", search)
+	}
+	
+	if accountType != "" {
+		endpoint += fmt.Sprintf("&account_type=%s", accountType)
+	}
+	
+	var resp types.UserListResponse
+	if err := c.doRequest("GET", endpoint, nil, &resp); err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	return &resp, nil
+}
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, c.parseError(resp)
-	}
-
+func (c *Client) GetUser(userID string) (*entities.User, error) {
 	var user entities.User
-	if err := json.NewDecoder(resp.Body).Decode(&user); err != nil {
-		return nil, fmt.Errorf("decoding response: %w", err)
+	endpoint := fmt.Sprintf("/admin/v1/users/%s", userID)
+	if err := c.doRequest("GET", endpoint, nil, &user); err != nil {
+		return nil, err
 	}
-
 	return &user, nil
 }
 
 type UpdateUserRequest struct {
-	Email       string                `json:"email"`
+	Email       string               `json:"email,omitempty"`
 	AccountType entities.AccountType `json:"account_type"`
 }
 
-func (c *AdminClient) UpdateUser(ctx context.Context, userID string, req UpdateUserRequest) (*entities.User, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshaling request: %w", err)
-	}
+type CreateUserRequest struct {
+	Email        string               `json:"email" validate:"required,email"`
+	Password     string               `json:"password" validate:"required,min=8"`
+	AccountType  entities.AccountType `json:"account_type" validate:"required"`
+	AuthProvider string               `json:"auth_provider" validate:"required"`
+}
 
-	url := fmt.Sprintf("/admin/v1/users/%s", userID)
-	resp, err := c.makeRequest(ctx, "PUT", url, bytes.NewReader(body), true)
-	if err != nil {
+func (c *Client) CreateUser(req CreateUserRequest) (*entities.User, error) {
+	var user entities.User
+	if err := c.doRequest("POST", "/admin/v1/users", req, &user); err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, c.parseError(resp)
-	}
-
-	var user entities.User
-	if err := json.NewDecoder(resp.Body).Decode(&user); err != nil {
-		return nil, fmt.Errorf("decoding response: %w", err)
-	}
-
 	return &user, nil
 }
 
-func (c *AdminClient) DeleteUser(ctx context.Context, userID string) error {
-	url := fmt.Sprintf("/admin/v1/users/%s", userID)
-	resp, err := c.makeRequest(ctx, "DELETE", url, nil, true)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return c.parseError(resp)
-	}
-
-	return nil
-}
-
-// System settings (super admin only)
-func (c *AdminClient) GetSettings(ctx context.Context) (map[string]interface{}, error) {
-	resp, err := c.makeRequest(ctx, "GET", "/admin/v1/settings", nil, true)
-	if err != nil {
+func (c *Client) UpdateUser(userID string, req UpdateUserRequest) (*entities.User, error) {
+	var user entities.User
+	endpoint := fmt.Sprintf("/admin/v1/users/%s", userID)
+	if err := c.doRequest("PUT", endpoint, req, &user); err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, c.parseError(resp)
-	}
-
-	var settings map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&settings); err != nil {
-		return nil, fmt.Errorf("decoding response: %w", err)
-	}
-
-	return settings, nil
+	return &user, nil
 }
 
-func (c *AdminClient) UpdateSettings(ctx context.Context, settings map[string]interface{}) (map[string]interface{}, error) {
-	body, err := json.Marshal(settings)
-	if err != nil {
-		return nil, fmt.Errorf("marshaling request: %w", err)
-	}
+func (c *Client) DeleteUser(userID string) error {
+	endpoint := fmt.Sprintf("/admin/v1/users/%s", userID)
+	return c.doRequest("DELETE", endpoint, nil, nil)
+}
 
-	resp, err := c.makeRequest(ctx, "PUT", "/admin/v1/settings", bytes.NewReader(body), true)
-	if err != nil {
+// System settings endpoints
+func (c *Client) GetSettings() (*types.SystemSettings, error) {
+	var settings types.SystemSettings
+	if err := c.doRequest("GET", "/admin/v1/settings", nil, &settings); err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	return &settings, nil
+}
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, c.parseError(resp)
-	}
+func (c *Client) UpdateSettings(settings types.SystemSettings) error {
+	return c.doRequest("PUT", "/admin/v1/settings", settings, nil)
+}
 
+func (c *Client) GetAuthProviders() (map[string]interface{}, error) {
 	var response map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return nil, fmt.Errorf("decoding response: %w", err)
+	if err := c.doRequest("GET", "/admin/v1/settings/auth-providers", nil, &response); err != nil {
+		return nil, err
 	}
-
 	return response, nil
-}
-
-// Helper methods
-func (c *AdminClient) makeRequest(ctx context.Context, method, path string, body io.Reader, requireAuth bool) (*http.Response, error) {
-	url := c.baseURL + path
-	req, err := http.NewRequestWithContext(ctx, method, url, body)
-	if err != nil {
-		return nil, fmt.Errorf("creating request: %w", err)
-	}
-
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-
-	if requireAuth && c.token != "" {
-		req.Header.Set("Authorization", "Bearer "+c.token)
-	}
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("making request: %w", err)
-	}
-
-	return resp, nil
-}
-
-func (c *AdminClient) parseError(resp *http.Response) error {
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("HTTP %d: failed to read error body", resp.StatusCode)
-	}
-
-	var errorResp map[string]string
-	if err := json.Unmarshal(body, &errorResp); err != nil {
-		return fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body))
-	}
-
-	if msg, ok := errorResp["error"]; ok {
-		return fmt.Errorf("HTTP %d: %s", resp.StatusCode, msg)
-	}
-
-	return fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body))
 }

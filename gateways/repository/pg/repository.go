@@ -3,6 +3,7 @@ package pg
 import (
 	"context"
 	"go-template/domain/example"
+	"go-template/domain/settings"
 	"go-template/domain/user"
 
 	"github.com/jackc/pgx/v5"
@@ -19,26 +20,29 @@ type DBTX interface {
 
 // Repository aggregates all repositories and provides transaction support
 type Repository struct {
-	db          *pgxpool.Pool
-	ExampleRepo example.Repository
-	UserRepo    user.Repository
+	db           *pgxpool.Pool
+	ExampleRepo  example.Repository
+	UserRepo     user.Repository
+	SettingsRepo settings.Repository
 }
 
 // NewRepository creates a new Repository instance with all sub-repositories
 func NewRepository(db *pgxpool.Pool) *Repository {
 	return &Repository{
-		db:          db,
-		ExampleRepo: NewExampleRepository(db),
-		UserRepo:    NewUserRepository(db),
+		db:           db,
+		ExampleRepo:  NewExampleRepository(db),
+		UserRepo:     NewUserRepository(db),
+		SettingsRepo: NewAdminSettingsRepository(db),
 	}
 }
 
 // WithTx creates repository instances that use the provided transaction
 func (r *Repository) WithTx(tx pgx.Tx) *Repository {
 	return &Repository{
-		db:          r.db,
-		ExampleRepo: NewExampleRepository(tx),
-		UserRepo:    NewUserRepository(tx),
+		db:           r.db,
+		ExampleRepo:  NewExampleRepository(tx),
+		UserRepo:     NewUserRepository(tx),
+		SettingsRepo: NewAdminSettingsRepository(tx),
 	}
 }
 

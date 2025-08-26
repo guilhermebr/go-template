@@ -31,3 +31,16 @@ type User struct {
 func (u *User) IsValid() bool {
 	return u.Email != "" && u.AuthProvider != "" && u.ID != uuid.Nil
 }
+
+type UserStats struct {
+	TotalUsers      int64
+	AdminUsers      int64
+	SuperAdminUsers int64
+	RegularUsers    int64
+	RecentSignups   int64
+}
+
+type ListUsersParams struct {
+	Limit  int32
+	Offset int32
+}

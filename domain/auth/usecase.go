@@ -12,11 +12,6 @@ import (
 	"github.com/gofrs/uuid/v5"
 )
 
-type RegisterRequest struct {
-	Email    string `json:"email" validate:"required,email"`
-	Password string `json:"password" validate:"required,min=6"`
-}
-
 type LoginRequest struct {
 	Email    string `json:"email" validate:"required,email"`
 	Password string `json:"password" validate:"required"`
@@ -39,48 +34,6 @@ func NewUseCase(repo Repository, authProvider Provider, jwtService jwt.Service) 
 		authProvider: authProvider,
 		jwtService:   jwtService,
 	}
-}
-
-func (uc *UseCase) Register(ctx context.Context, req RegisterRequest) (AuthResponse, error) {
-	slog.Info("starting user registration", "email", req.Email)
-
-	// Register with auth provider (Supabase)
-	authProviderID, err := uc.authProvider.RegisterUser(ctx, req.Email, req.Password)
-	if err != nil {
-		slog.Error("failed to register with auth provider", "error", err)
-		return AuthResponse{}, fmt.Errorf("registration failed: %w", err)
-	}
-
-	// Create user in our database
-	now := time.Now()
-	user := entities.User{
-		ID:             uuid.Must(uuid.NewV4()),
-		Email:          req.Email,
-		AuthProvider:   uc.authProvider.Provider(),
-		AuthProviderID: authProviderID,
-		AccountType:    entities.AccountTypeUser,
-		CreatedAt:      now,
-		UpdatedAt:      now,
-	}
-
-	if err := uc.repo.Create(ctx, user); err != nil {
-		slog.Error("failed to create user in database", "error", err)
-		return AuthResponse{}, fmt.Errorf("failed to create user: %w", err)
-	}
-
-	// Generate JWT token
-	token, err := uc.jwtService.GenerateToken(user.ID.String(), user.Email, user.AccountType.String())
-	if err != nil {
-		slog.Error("failed to generate JWT token", "error", err)
-		return AuthResponse{}, fmt.Errorf("failed to generate token: %w", err)
-	}
-
-	slog.Info("user registered successfully", "user_id", user.ID)
-
-	return AuthResponse{
-		Token: token,
-		User:  user,
-	}, nil
 }
 
 func (uc *UseCase) Login(ctx context.Context, req LoginRequest) (AuthResponse, error) {

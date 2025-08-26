@@ -6,6 +6,7 @@ import (
 	"go-template/app/api/v1/auth"
 	"go-template/app/api/v1/example"
 	authDomain "go-template/domain/auth"
+	"go-template/domain/settings"
 	"go-template/domain/user"
 	"go-template/internal/jwt"
 	"net/http"
@@ -17,6 +18,7 @@ type ApiHandlers struct {
 	ExampleUseCase example.ExampleUseCase
 	AuthUseCase    *authDomain.UseCase
 	UserUseCase    *user.UseCase
+	SettingsUseCase *settings.UseCase
 	AuthMiddleware *middleware.AuthMiddleware
 	JWTService     jwt.Service
 }
@@ -28,7 +30,7 @@ func (h *ApiHandlers) Routes(r chi.Router) {
 	// API routes
 	r.Route("/api/v1", func(r chi.Router) {
 		// Auth routes (public)
-		authHandler := auth.NewAuthHandler(h.AuthUseCase, h.UserUseCase)
+		authHandler := auth.NewAuthHandler(h.AuthUseCase, h.UserUseCase, h.JWTService)
 		r.Mount("/auth", authHandler.Routes())
 
 		// Example routes (protected)
@@ -37,7 +39,7 @@ func (h *ApiHandlers) Routes(r chi.Router) {
 	})
 
 	// Admin routes (protected)
-	adminHandler := admin.NewAdminHandler(h.AuthUseCase, h.UserUseCase, h.JWTService, h.AuthMiddleware)
+	adminHandler := admin.NewAdminHandler(h.AuthUseCase, h.UserUseCase, h.SettingsUseCase, h.JWTService, h.AuthMiddleware)
 	r.Mount("/admin/v1", adminHandler.Routes())
 
 }

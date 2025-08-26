@@ -11,6 +11,7 @@ type Provider interface {
 	RegisterUser(ctx context.Context, email, password string) (string, error)
 	Login(ctx context.Context, email, password string) (string, error)
 	ValidateToken(ctx context.Context, token string) (*entities.User, error)
+	DeleteUser(ctx context.Context, authProviderID string) error
 }
 
 type AuthConfig struct {

@@ -1,5 +1,5 @@
 -- Create account type enum
-CREATE TYPE account_type AS ENUM ('user', 'admin', 'superadmin');
+CREATE TYPE account_type AS ENUM ('user', 'admin', 'super_admin');
 
 
 CREATE TABLE users (

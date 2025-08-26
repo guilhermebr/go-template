@@ -4,6 +4,7 @@ import (
 	"context"
 	"go-template/domain/auth"
 	"go-template/domain/entities"
+	"go-template/internal/jwt"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-playground/validator/v10"
@@ -12,26 +13,28 @@ import (
 
 //go:generate moq -skip-ensure -stub -pkg mocks -out mocks/auth_uc.go . AuthUseCase
 type AuthUseCase interface {
-	Register(ctx context.Context, req auth.RegisterRequest) (auth.AuthResponse, error)
 	Login(ctx context.Context, req auth.LoginRequest) (auth.AuthResponse, error)
 }
 
 //go:generate moq -skip-ensure -stub -pkg mocks -out mocks/user_uc.go . UserUseCase
 type UserUseCase interface {
 	GetMe(ctx context.Context, userID uuid.UUID) (entities.User, error)
+	CreateUser(ctx context.Context, email, password, authProvider string, accountType entities.AccountType) (entities.User, error)
 }
 
 type AuthHandler struct {
-	authUC    AuthUseCase
-	userUC    UserUseCase
-	validator *validator.Validate
+	authUC     AuthUseCase
+	userUC     UserUseCase
+	jwtService jwt.Service
+	validator  *validator.Validate
 }
 
-func NewAuthHandler(authUC AuthUseCase, userUC UserUseCase) *AuthHandler {
+func NewAuthHandler(authUC AuthUseCase, userUC UserUseCase, jwtService jwt.Service) *AuthHandler {
 	return &AuthHandler{
-		authUC:    authUC,
-		userUC:    userUC,
-		validator: validator.New(),
+		authUC:     authUC,
+		userUC:     userUC,
+		jwtService: jwtService,
+		validator:  validator.New(),
 	}
 }
 
