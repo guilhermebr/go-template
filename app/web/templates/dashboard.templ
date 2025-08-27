@@ -1,0 +1,188 @@
+package templates
+
+import "go-template/domain/entities"
+
+templ Dashboard(user interface{}) {
+	@Layout("Dashboard", user.(*entities.User)) {
+		<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+			<!-- Welcome Section -->
+			<div class="mb-8">
+				<h1 class="text-2xl font-bold text-gray-900 sm:text-3xl">
+					Welcome back, { user.(*entities.User).Email }!
+				</h1>
+				<p class="mt-2 text-gray-600">
+					Here's what's happening with your account today.
+				</p>
+			</div>
+
+			<!-- Quick Stats Cards -->
+			<div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 mb-8">
+				@StatsCard("Account Status", "Active", "text-green-600", "shield-check")
+				@StatsCard("Account Type", string(user.(*entities.User).AccountType), "text-blue-600", "user")
+				@StatsCard("Member Since", user.(*entities.User).CreatedAt.Format("Jan 2, 2006"), "text-purple-600", "calendar")
+			</div>
+
+			<!-- Main Content Grid -->
+			<div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+				<!-- Quick Actions -->
+				<div class="bg-white overflow-hidden shadow rounded-lg">
+					<div class="px-4 py-5 sm:p-6">
+						<h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Quick Actions</h3>
+						<div class="space-y-3">
+							@ActionButton("/profile", "Edit Profile", "Manage your personal information", "user")
+							@ActionButton("/docs", "API Documentation", "Explore our comprehensive API docs", "document-text")
+							@ActionButton("/docs/swagger-ui.html", "Interactive API", "Try out API endpoints", "play")
+						</div>
+					</div>
+				</div>
+
+				<!-- Account Information -->
+				<div class="bg-white overflow-hidden shadow rounded-lg">
+					<div class="px-4 py-5 sm:p-6">
+						<h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Account Information</h3>
+						<dl class="space-y-4">
+							@InfoItem("User ID", user.(*entities.User).ID.String())
+							@InfoItem("Email Address", user.(*entities.User).Email)
+							@InfoItem("Account Type", string(user.(*entities.User).AccountType))
+							@InfoItem("Auth Provider", user.(*entities.User).AuthProvider)
+							@InfoItem("Created", user.(*entities.User).CreatedAt.Format("January 2, 2006 at 3:04 PM"))
+							@InfoItem("Last Updated", user.(*entities.User).UpdatedAt.Format("January 2, 2006 at 3:04 PM"))
+						</dl>
+					</div>
+				</div>
+
+				<!-- Recent Activity -->
+				<div class="bg-white overflow-hidden shadow rounded-lg">
+					<div class="px-4 py-5 sm:p-6">
+						<h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Recent Activity</h3>
+						<div class="flow-root">
+							<ul class="-mb-8">
+								@ActivityItem("Account created", "You successfully created your account", user.(*entities.User).CreatedAt.Format("Jan 2, 3:04 PM"), "user", true)
+								@ActivityItem("Profile updated", "Account information was last updated", user.(*entities.User).UpdatedAt.Format("Jan 2, 3:04 PM"), "pencil", false)
+							</ul>
+						</div>
+					</div>
+				</div>
+
+				<!-- Resources -->
+				<div class="bg-white overflow-hidden shadow rounded-lg">
+					<div class="px-4 py-5 sm:p-6">
+						<h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Resources</h3>
+						<div class="space-y-3">
+							@ResourceLink("/docs", "API Documentation", "Complete API reference and guides")
+							@ResourceLink("/docs/redoc.html", "Redoc Documentation", "Beautiful API documentation interface")
+							@ResourceLink("https://github.com/guilhermebr/go-template", "Source Code", "View the project on GitHub")
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	}
+}
+
+templ StatsCard(title, value, valueClass, iconName string) {
+	<div class="bg-white overflow-hidden shadow rounded-lg">
+		<div class="p-5">
+			<div class="flex items-center">
+				<div class="flex-shrink-0">
+					<div class="w-8 h-8 bg-brand-100 rounded-md flex items-center justify-center">
+						@DashboardIcon(iconName, "h-5 w-5 text-brand-600")
+					</div>
+				</div>
+				<div class="ml-5 w-0 flex-1">
+					<dl>
+						<dt class="text-sm font-medium text-gray-500 truncate">{ title }</dt>
+						<dd class={"text-lg font-medium " + valueClass}>{ value }</dd>
+					</dl>
+				</div>
+			</div>
+		</div>
+	</div>
+}
+
+templ ActionButton(href, title, description, iconName string) {
+	<a href={ templ.URL(href) } class="block p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+		<div class="flex items-start">
+			<div class="flex-shrink-0">
+				@DashboardIcon(iconName, "h-5 w-5 text-brand-500 mt-0.5")
+			</div>
+			<div class="ml-3">
+				<p class="text-sm font-medium text-gray-900">{ title }</p>
+				<p class="text-sm text-gray-500">{ description }</p>
+			</div>
+		</div>
+	</a>
+}
+
+templ InfoItem(label, value string) {
+	<div>
+		<dt class="text-sm font-medium text-gray-500">{ label }</dt>
+		<dd class="text-sm text-gray-900 mt-1 break-all">{ value }</dd>
+	</div>
+}
+
+templ ActivityItem(title, description, time, iconName string, isLast bool) {
+	<li>
+		<div class="relative pb-8">
+			if !isLast {
+				<span class="absolute top-4 left-4 -ml-px h-full w-0.5 bg-gray-200" aria-hidden="true"></span>
+			}
+			<div class="relative flex space-x-3">
+				<div>
+					<span class="h-8 w-8 rounded-full bg-brand-500 flex items-center justify-center ring-8 ring-white">
+						@DashboardIcon(iconName, "h-5 w-5 text-white")
+					</span>
+				</div>
+				<div class="min-w-0 flex-1">
+					<div>
+						<p class="text-sm font-medium text-gray-900">{ title }</p>
+						<p class="text-sm text-gray-500">{ description }</p>
+					</div>
+					<div class="mt-2 text-sm text-gray-500">
+						<time>{ time }</time>
+					</div>
+				</div>
+			</div>
+		</div>
+	</li>
+}
+
+templ ResourceLink(href, title, description string) {
+	if len(href) >= 4 && href[:4] == "http" {
+		<a href={ templ.URL(href) } class="block p-3 border border-gray-200 rounded-lg hover:border-brand-300 hover:bg-brand-50 transition-colors" target="_blank">
+			<div>
+				<p class="text-sm font-medium text-gray-900">{ title }</p>
+				<p class="text-sm text-gray-500">{ description }</p>
+			</div>
+		</a>
+	} else {
+		<a href={ templ.URL(href) } class="block p-3 border border-gray-200 rounded-lg hover:border-brand-300 hover:bg-brand-50 transition-colors" target="_self">
+			<div>
+				<p class="text-sm font-medium text-gray-900">{ title }</p>
+				<p class="text-sm text-gray-500">{ description }</p>
+			</div>
+		</a>
+	}
+}
+
+// Dashboard-specific icons
+templ DashboardIcon(name, class string) {
+	<svg class={ class } fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+		switch name {
+			case "shield-check":
+				<path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.30 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z"/>
+			case "user":
+				<path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z"/>
+			case "calendar":
+				<path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5"/>
+			case "document-text":
+				<path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"/>
+			case "play":
+				<path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 0 1 0 1.972l-11.54 6.347a1.125 1.125 0 0 1-1.667-.986V5.653Z"/>
+			case "pencil":
+				<path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125"/>
+			default:
+				<path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/>
+		}
+	</svg>
+}

@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"go-template/app/api/middleware"
 	"go-template/domain/auth"
 	"go-template/domain/entities"
 	"go-template/internal/jwt"
@@ -23,18 +24,20 @@ type UserUseCase interface {
 }
 
 type AuthHandler struct {
-	authUC     AuthUseCase
-	userUC     UserUseCase
-	jwtService jwt.Service
-	validator  *validator.Validate
+	authUC         AuthUseCase
+	userUC         UserUseCase
+	jwtService     jwt.Service
+	validator      *validator.Validate
+	authMiddleware *middleware.AuthMiddleware
 }
 
-func NewAuthHandler(authUC AuthUseCase, userUC UserUseCase, jwtService jwt.Service) *AuthHandler {
+func NewAuthHandler(authUC AuthUseCase, userUC UserUseCase, jwtService jwt.Service, authMiddleware *middleware.AuthMiddleware) *AuthHandler {
 	return &AuthHandler{
-		authUC:     authUC,
-		userUC:     userUC,
-		jwtService: jwtService,
-		validator:  validator.New(),
+		authUC:         authUC,
+		userUC:         userUC,
+		jwtService:     jwtService,
+		validator:      validator.New(),
+		authMiddleware: authMiddleware,
 	}
 }
 
@@ -43,7 +46,12 @@ func (h *AuthHandler) Routes() chi.Router {
 
 	r.Post("/register", h.Register)
 	r.Post("/login", h.Login)
-	r.Get("/me", h.GetMe)
+	
+	// Protected routes
+	r.Group(func(r chi.Router) {
+		r.Use(h.authMiddleware.RequireAuth)
+		r.Get("/me", h.GetMe)
+	})
 
 	return r
 }

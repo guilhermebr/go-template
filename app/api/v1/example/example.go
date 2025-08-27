@@ -23,12 +23,20 @@ type CreateExampleResponse struct {
 }
 
 // CreateExample godoc
-// @Summary Create a new example
-// @Description Create a new example with the given title and content
-// @Tags examples
-// @Accept json
-// @Produce json
-// @Param example body CreateExampleRequest true "Example to create"
+//
+//	@Summary		Create a new example
+//	@Description	Create a new example with title and content
+//	@Tags			examples
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			example	body	CreateExampleRequest	true	"Example to create"
+//	@Success		201	{object}	CreateExampleResponse
+//	@Failure		400	{object}	map[string]string
+//	@Failure		401	{object}	map[string]string
+//	@Failure		409	{object}	map[string]string
+//	@Failure		500	{object}	map[string]string
+//	@Router			/api/v1/examples [post]
 func (h *ExampleHandler) CreateExample(w http.ResponseWriter, r *http.Request) {
 	var input CreateExampleRequest
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
@@ -71,12 +79,20 @@ func (h *ExampleHandler) CreateExample(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetExampleByID godoc
-// @Summary Get an example by ID
-// @Description Get an example by its unique identifier
-// @Tags examples
-// @Accept json
-// @Produce json
-// @Param id path string true "Example ID"
+//
+//	@Summary		Get an example by ID
+//	@Description	Retrieve an example by its unique identifier
+//	@Tags			examples
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			id	path	string	true	"Example ID"
+//	@Success		200	{object}	entities.Example
+//	@Failure		400	{object}	map[string]string
+//	@Failure		401	{object}	map[string]string
+//	@Failure		404	{object}	map[string]string
+//	@Failure		500	{object}	map[string]string
+//	@Router			/api/v1/examples/{id} [get]
 func (h *ExampleHandler) GetExampleByID(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {

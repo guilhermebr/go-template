@@ -1,0 +1,16 @@
+{
+  "groupId": "com.example",
+  "artifactId": "go-template-api-client",
+  "artifactVersion": "1.0.0",
+  "artifactUrl": "https://github.com/guilhermebr/go-template",
+  "developerName": "Go Template Team",
+  "developerEmail": "dev@example.com",
+  "developerOrganization": "Example Organization",
+  "developerOrganizationUrl": "https://example.com",
+  "apiPackage": "com.example.gotemplateapi.client.api",
+  "modelPackage": "com.example.gotemplateapi.client.model",
+  "invokerPackage": "com.example.gotemplateapi.client",
+  "library": "okhttp-gson",
+  "java8": true,
+  "dateLibrary": "java8"
+}

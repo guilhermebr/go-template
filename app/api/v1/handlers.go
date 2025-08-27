@@ -15,12 +15,12 @@ import (
 )
 
 type ApiHandlers struct {
-	ExampleUseCase example.ExampleUseCase
-	AuthUseCase    *authDomain.UseCase
-	UserUseCase    *user.UseCase
+	ExampleUseCase  example.ExampleUseCase
+	AuthUseCase     *authDomain.UseCase
+	UserUseCase     *user.UseCase
 	SettingsUseCase *settings.UseCase
-	AuthMiddleware *middleware.AuthMiddleware
-	JWTService     jwt.Service
+	AuthMiddleware  *middleware.AuthMiddleware
+	JWTService      jwt.Service
 }
 
 func (h *ApiHandlers) Routes(r chi.Router) {
@@ -29,8 +29,8 @@ func (h *ApiHandlers) Routes(r chi.Router) {
 
 	// API routes
 	r.Route("/api/v1", func(r chi.Router) {
-		// Auth routes (public)
-		authHandler := auth.NewAuthHandler(h.AuthUseCase, h.UserUseCase, h.JWTService)
+		// Auth routes (mixed public/protected)
+		authHandler := auth.NewAuthHandler(h.AuthUseCase, h.UserUseCase, h.JWTService, h.AuthMiddleware)
 		r.Mount("/auth", authHandler.Routes())
 
 		// Example routes (protected)

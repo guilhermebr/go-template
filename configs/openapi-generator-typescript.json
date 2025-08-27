@@ -1,0 +1,10 @@
+{
+  "npmName": "go-template-api-client",
+  "npmVersion": "1.0.0",
+  "npmRepository": "https://github.com/guilhermebr/go-template",
+  "supportsES6": true,
+  "typescriptThreePlus": true,
+  "withInterfaces": true,
+  "useSingleRequestParameter": true,
+  "enumNameSuffix": ""
+}

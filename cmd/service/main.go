@@ -1,3 +1,21 @@
+// Package main provides the Go Template API service
+//
+//	@title						Go Template API
+//	@version					1.0.0
+//	@description				A Go template API built with Domain-Driven Design principles
+//	@termsOfService				http://swagger.io/terms/
+//	@contact.name				API Support
+//	@contact.url				https://github.com/guilhermebr/go-template
+//	@contact.email				support@example.com
+//	@license.name				MIT
+//	@license.url				https://opensource.org/licenses/MIT
+//	@host						localhost:8080
+//	@BasePath					/
+//	@securityDefinitions.apikey	BearerAuth
+//	@in							header
+//	@name						Authorization
+//	@description				Type "Bearer" followed by a space and JWT token.
+//	@schemes					http https
 package main
 
 import (
@@ -23,6 +41,9 @@ import (
 
 	"github.com/guilhermebr/gox/logger"
 	"github.com/guilhermebr/gox/postgres"
+
+	// Import generated docs for swagger integration
+	_ "go-template/docs"
 )
 
 // Injected on build time by ldflags.

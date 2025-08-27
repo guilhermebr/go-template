@@ -1,0 +1,9 @@
+# oapi-codegen configuration for Go client generation
+package: client
+output: sdks/go/client.go
+generate:
+  client: true
+  models: true
+output-options:
+  skip-fmt: false
+  skip-prune: true

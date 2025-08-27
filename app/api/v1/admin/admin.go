@@ -53,7 +53,20 @@ type UpdateUserRequest struct {
 	AccountType entities.AccountType `json:"account_type" validate:"required"`
 }
 
-// AdminLogin handles admin login with privilege validation
+// AdminLogin godoc
+//
+//	@Summary		Admin login
+//	@Description	Authenticate admin user with privilege validation
+//	@Tags			admin
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body	AdminLoginRequest	true	"Admin login request"
+//	@Success		200	{object}	AdminLoginResponse
+//	@Failure		400	{object}	map[string]string
+//	@Failure		401	{object}	map[string]string
+//	@Failure		403	{object}	map[string]string
+//	@Failure		500	{object}	map[string]string
+//	@Router			/admin/v1/login [post]
 func (h *AdminHandler) AdminLogin(w http.ResponseWriter, r *http.Request) {
 	var req AdminLoginRequest
 	if err := render.DecodeJSON(r.Body, &req); err != nil {
@@ -175,6 +188,17 @@ func (h *AdminHandler) VerifyAdminToken(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
+// GetDashboardStats godoc
+//
+//	@Summary		Get dashboard statistics
+//	@Description	Retrieve admin dashboard statistics including user counts and system alerts
+//	@Tags			admin
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Success		200	{object}	DashboardStatsResponse
+//	@Failure		401	{object}	map[string]string
+//	@Failure		500	{object}	map[string]string
+//	@Router			/admin/v1/dashboard/stats [get]
 func (h *AdminHandler) GetDashboardStats(w http.ResponseWriter, r *http.Request) {
 	userStats, err := h.userUC.GetUserStats(r.Context())
 	if err != nil {
@@ -196,6 +220,21 @@ func (h *AdminHandler) GetDashboardStats(w http.ResponseWriter, r *http.Request)
 	render.JSON(w, r, stats)
 }
 
+// CreateUser godoc
+//
+//	@Summary		Create a new user
+//	@Description	Create a new user account with specified account type
+//	@Tags			admin
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			request	body	CreateUserRequest	true	"User creation request"
+//	@Success		201	{object}	entities.User
+//	@Failure		400	{object}	map[string]string
+//	@Failure		401	{object}	map[string]string
+//	@Failure		403	{object}	map[string]string
+//	@Failure		500	{object}	map[string]string
+//	@Router			/admin/v1/users [post]
 func (h *AdminHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	var req CreateUserRequest
 	if err := render.DecodeJSON(r.Body, &req); err != nil {
@@ -247,6 +286,21 @@ func (h *AdminHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	render.JSON(w, r, user)
 }
 
+// ListUsers godoc
+//
+//	@Summary		List users
+//	@Description	Retrieve a paginated list of users with optional search and filtering
+//	@Tags			admin
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			page	query	int	false	"Page number (default: 1)"
+//	@Param			page_size	query	int	false	"Page size (default: 20, max: 100)"
+//	@Param			search	query	string	false	"Search term for email"
+//	@Param			account_type	query	string	false	"Filter by account type"
+//	@Success		200	{object}	UserListResponse
+//	@Failure		401	{object}	map[string]string
+//	@Failure		500	{object}	map[string]string
+//	@Router			/admin/v1/users [get]
 func (h *AdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	// Parse pagination parameters
 	page := 1

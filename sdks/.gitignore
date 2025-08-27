@@ -1,0 +1,5 @@
+# Ignore all generated SDK content but keep the directory structure
+*
+!.gitignore
+!*/
+!*/.gitkeep

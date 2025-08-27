@@ -1,0 +1,376 @@
+openapi: 3.0.3
+info:
+  title: Go Template API
+  description: A Go template API built with Domain-Driven Design principles
+  version: 1.0.0
+  contact:
+    name: API Support
+    url: https://github.com/guilhermebr/go-template
+
+servers:
+  - url: http://localhost:8080
+    description: Development server
+  - url: https://api.example.com
+    description: Production server
+
+paths:
+  /api/v1/auth/register:
+    post:
+      tags:
+        - auth
+      summary: Register a new user
+      description: Register a new user with email and password
+      operationId: registerUser
+      requestBody:
+        description: Registration request
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: User already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/auth/login:
+    post:
+      tags:
+        - auth
+      summary: User login
+      description: Authenticate user with email and password
+      operationId: loginUser
+      requestBody:
+        description: Login request
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: User authenticated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/auth/me:
+    get:
+      tags:
+        - auth
+      summary: Get current user
+      description: Get current authenticated user information
+      operationId: getCurrentUser
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Current user information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/examples:
+    post:
+      tags:
+        - examples
+      summary: Create a new example
+      description: Create a new example with title and content
+      operationId: createExample
+      security:
+        - BearerAuth: []
+      requestBody:
+        description: Example to create
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateExampleRequest'
+      responses:
+        '201':
+          description: Example created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateExampleResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/examples/{id}:
+    get:
+      tags:
+        - examples
+      summary: Get an example by ID
+      description: Retrieve an example by its unique identifier
+      operationId: getExampleById
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Example ID
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Example retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Example'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Example not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    RegisterRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          description: User email address
+          example: user@example.com
+        password:
+          type: string
+          minLength: 6
+          description: User password (minimum 6 characters)
+          example: password123
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          description: User email address
+          example: user@example.com
+        password:
+          type: string
+          description: User password
+          example: password123
+
+    AuthResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          description: JWT authentication token
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        user:
+          $ref: '#/components/schemas/User'
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: User unique identifier
+          example: 123e4567-e89b-12d3-a456-426614174000
+        email:
+          type: string
+          format: email
+          description: User email address
+          example: user@example.com
+        auth_provider:
+          type: string
+          description: Authentication provider used
+          example: supabase
+        account_type:
+          $ref: '#/components/schemas/AccountType'
+        created_at:
+          type: string
+          format: date-time
+          description: User creation timestamp
+          example: 2023-01-01T00:00:00Z
+        updated_at:
+          type: string
+          format: date-time
+          description: User last update timestamp
+          example: 2023-01-01T00:00:00Z
+
+    AccountType:
+      type: string
+      enum:
+        - user
+        - admin
+        - super_admin
+      description: User account type
+      example: user
+
+    CreateExampleRequest:
+      type: object
+      required:
+        - title
+        - content
+      properties:
+        title:
+          type: string
+          description: Example title
+          example: My Example Title
+        content:
+          type: string
+          description: Example content
+          example: This is the content of my example
+
+    CreateExampleResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Created example ID
+          example: 123e4567-e89b-12d3-a456-426614174000
+
+    Example:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Example unique identifier
+          example: 123e4567-e89b-12d3-a456-426614174000
+        title:
+          type: string
+          description: Example title
+          example: My Example Title
+        content:
+          type: string
+          description: Example content
+          example: This is the content of my example
+        created_at:
+          type: string
+          format: date-time
+          description: Example creation timestamp
+          example: 2023-01-01T00:00:00Z
+        updated_at:
+          type: string
+          format: date-time
+          description: Example last update timestamp
+          example: 2023-01-01T00:00:00Z
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+          example: Something went wrong

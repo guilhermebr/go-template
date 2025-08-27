@@ -16,17 +16,18 @@ type RegisterRequest struct {
 }
 
 // Register godoc
-// @Summary      Register a new user
-// @Description  Register a new user with email and password
-// @Tags         auth
-// @Accept       json
-// @Produce      json
-// @Param        request body RegisterRequest true "Registration request"
-// @Success      201 {object} auth.AuthResponse
-// @Failure      400 {object} map[string]string
-// @Failure      409 {object} map[string]string
-// @Failure      500 {object} map[string]string
-// @Router       /api/v1/auth/register [post]
+//
+//	@Summary		Register a new user
+//	@Description	Register a new user with email and password
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body	RegisterRequest	true	"Registration request"
+//	@Success		201	{object}	auth.AuthResponse
+//	@Failure		400	{object}	map[string]string
+//	@Failure		409	{object}	map[string]string
+//	@Failure		500	{object}	map[string]string
+//	@Router			/api/v1/auth/register [post]
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var req RegisterRequest
 	if err := render.DecodeJSON(r.Body, &req); err != nil {
@@ -85,17 +86,18 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 }
 
 // Login godoc
-// @Summary      User login
-// @Description  Authenticate user with email and password
-// @Tags         auth
-// @Accept       json
-// @Produce      json
-// @Param        request body auth.LoginRequest true "Login request"
-// @Success      200 {object} auth.AuthResponse
-// @Failure      400 {object} map[string]string
-// @Failure      401 {object} map[string]string
-// @Failure      500 {object} map[string]string
-// @Router       /api/v1/auth/login [post]
+//
+//	@Summary		User login
+//	@Description	Authenticate user with email and password
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body	auth.LoginRequest	true	"Login request"
+//	@Success		200	{object}	auth.AuthResponse
+//	@Failure		400	{object}	map[string]string
+//	@Failure		401	{object}	map[string]string
+//	@Failure		500	{object}	map[string]string
+//	@Router			/api/v1/auth/login [post]
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var req auth.LoginRequest
 	if err := render.DecodeJSON(r.Body, &req); err != nil {
@@ -128,16 +130,17 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetMe godoc
-// @Summary      Get current user
-// @Description  Get current user information
-// @Tags         auth
-// @Produce      json
-// @Security     Bearer
-// @Success      200 {object} entities.User
-// @Failure      401 {object} map[string]string
-// @Failure      404 {object} map[string]string
-// @Failure      500 {object} map[string]string
-// @Router       /api/v1/auth/me [get]
+//
+//	@Summary		Get current user
+//	@Description	Get current authenticated user information
+//	@Tags			auth
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Success		200	{object}	entities.User
+//	@Failure		401	{object}	map[string]string
+//	@Failure		404	{object}	map[string]string
+//	@Failure		500	{object}	map[string]string
+//	@Router			/api/v1/auth/me [get]
 func (h *AuthHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 	claims, ok := middleware.GetUserFromContext(r.Context())
 	if !ok {

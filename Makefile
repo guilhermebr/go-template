@@ -8,6 +8,39 @@ GIT_COMMIT=$(shell git rev-parse HEAD)
 GIT_BUILD_TIME=$(shell date '+%Y-%m-%d__%I:%M:%S%p')
 GO_BIN_PATH=$(shell go env GOPATH)/bin
 
+.PHONY: help
+help: ## Show available make targets
+	@echo "Available targets:"
+	@echo ""
+	@echo "Build & Generate:"
+	@echo "  build              Build all binaries (service, admin, web)"
+	@echo "  generate           Generate all code (templ + sqlc + go generate)"
+	@echo "  templ             Generate templ templates"
+	@echo "  sqlc-generate     Generate sqlc code"
+	@echo ""
+	@echo "OpenAPI & SDKs:"
+	@echo "  docs                      Show documentation URLs"
+	@echo "  openapi-generate          Generate OpenAPI spec from Go code"
+	@echo "  sdk-go                    Generate Go client SDK (manual spec)"
+	@echo "  sdk-typescript            Generate TypeScript client SDK (manual spec)"
+	@echo "  sdk-python                Generate Python client SDK (manual spec)"
+	@echo "  sdk-java                  Generate Java client SDK (manual spec)"
+	@echo "  sdks                      Generate all client SDKs (manual spec)"
+	@echo "  sdks-generated            Generate all client SDKs (from code annotations)"
+	@echo ""
+	@echo "Development:"
+	@echo "  setup             Install all required tools"
+	@echo "  test              Run tests (short)"
+	@echo "  test-full         Run all tests with coverage"
+	@echo "  coverage          Generate HTML coverage report"
+	@echo "  lint              Run linters"
+	@echo "  gosec             Run security analysis"
+	@echo ""
+	@echo "Database:"
+	@echo "  migration/create  Create new migration"
+	@echo "  migration/up      Apply migrations"
+	@echo "  migration/down    Rollback migrations"
+
 define goBuild
 	@echo "==> Go Building $2"
 	@env GOOS=${OS} GOARCH=${ARCH} go build -v -o  build/$1 \
@@ -20,6 +53,7 @@ endef
 build: generate
 	$(call goBuild,service,"service")
 	$(call goBuild,admin,"admin")
+	$(call goBuild,web,"web")
 
 # ###########
 # Setup
@@ -60,13 +94,24 @@ install-templ:
 	@echo "==> Installing templ"
 	@go install github.com/a-h/templ/cmd/templ@latest
 
-.PHONY: install-swag
-install-swag:
+.PHONY: install-oapi-codegen
+install-oapi-codegen:
+	@echo "==> Installing oapi-codegen"
+	@go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@latest
+
+.PHONY: install-swag-v2
+install-swag-v2:
 	@echo "==> Installing swag"
 	@go install github.com/swaggo/swag/cmd/swag@latest
 
+.PHONY: install-openapi-generator
+install-openapi-generator:
+	@echo "==> Installing OpenAPI Generator"
+	@npm install -g @openapitools/openapi-generator-cli
+
+
 .PHONY: setup
-setup: install-migration install-moq install-linters install-test-fmt install-gosec install-sqlc install-templ install-swag
+setup: install-migration install-moq install-linters install-test-fmt install-gosec install-sqlc install-templ install-oapi-codegen install-swag-v2 install-openapi-generator
 	@go mod tidy
 
 
@@ -80,11 +125,6 @@ templ:
 	@echo "==> Generating templ templates"
 	@templ generate
 
-# Generate swagger documentation
-.PHONY: swagger
-swagger:
-	@echo "==> Generating swagger documentation"
-	@${GO_BIN_PATH}/swag init -g cmd/service/main.go -o docs/
 
 # Generate sqlc code
 .PHONY: sqlc-generate
@@ -93,9 +133,109 @@ sqlc-generate:
 	@rm -f gateways/repository/pg/gen/*.go
 	@sqlc generate
 
-# Generate all code (templ templates + swagger docs + sqlc + go generate)
+# Generate OpenAPI 3.x spec from Go annotations
+.PHONY: openapi-generate
+openapi-generate:
+	@echo "==> Generating OpenAPI 3.x spec from Go code"
+	@${GO_BIN_PATH}/swag init -g cmd/service/main.go -o docs/ --parseDependency --parseInternal
+	@mv docs/swagger.yaml docs/openapi-generated.yaml
+	@mv docs/swagger.json docs/openapi-generated.json
+	@cp docs/openapi-generated.* app/web/docs/
+
+# Generate OpenAPI documentation
+.PHONY: docs
+docs:
+	@echo "==> OpenAPI documentation is ready at:"
+	@echo "    - Redoc:      docs/redoc.html"
+	@echo "    - Swagger UI: docs/swagger-ui.html"
+	@echo "    - Manual:     docs/openapi.yaml"
+	@echo "    - Generated:  docs/openapi-generated.yaml"
+
+# Generate Go client SDK using oapi-codegen
+.PHONY: sdk-go
+sdk-go:
+	@echo "==> Generating Go SDK"
+	@${GO_BIN_PATH}/oapi-codegen -config configs/oapi-codegen.yaml docs/openapi.yaml
+
+# Generate TypeScript SDK using OpenAPI Generator
+.PHONY: sdk-typescript
+sdk-typescript:
+	@echo "==> Generating TypeScript SDK"
+	@npx openapi-generator-cli generate \
+		-i docs/openapi.yaml \
+		-g typescript-fetch \
+		-o sdks/typescript \
+		-c configs/openapi-generator-typescript.json
+
+# Generate Python SDK using OpenAPI Generator
+.PHONY: sdk-python
+sdk-python:
+	@echo "==> Generating Python SDK"
+	@npx openapi-generator-cli generate \
+		-i docs/openapi.yaml \
+		-g python \
+		-o sdks/python \
+		-c configs/openapi-generator-python.json
+
+# Generate Java SDK using OpenAPI Generator
+.PHONY: sdk-java
+sdk-java:
+	@echo "==> Generating Java SDK"
+	@npx openapi-generator-cli generate \
+		-i docs/openapi.yaml \
+		-g java \
+		-o sdks/java \
+		-c configs/openapi-generator-java.json
+
+# Generate SDKs from generated spec
+.PHONY: sdks-generated
+sdks-generated: openapi-generate sdk-go-generated sdk-typescript-generated sdk-python-generated sdk-java-generated
+	@echo "==> All SDKs generated successfully from code annotations"
+
+# Generate Go SDK from generated spec
+.PHONY: sdk-go-generated
+sdk-go-generated:
+	@echo "==> Generating Go SDK from generated spec"
+	@${GO_BIN_PATH}/oapi-codegen -config configs/oapi-codegen.yaml docs/openapi-generated.yaml
+
+# Generate TypeScript SDK from generated spec
+.PHONY: sdk-typescript-generated
+sdk-typescript-generated:
+	@echo "==> Generating TypeScript SDK from generated spec"
+	@npx openapi-generator-cli generate \
+		-i docs/openapi-generated.yaml \
+		-g typescript-fetch \
+		-o sdks/typescript \
+		-c configs/openapi-generator-typescript.json
+
+# Generate Python SDK from generated spec
+.PHONY: sdk-python-generated
+sdk-python-generated:
+	@echo "==> Generating Python SDK from generated spec"
+	@npx openapi-generator-cli generate \
+		-i docs/openapi-generated.yaml \
+		-g python \
+		-o sdks/python \
+		-c configs/openapi-generator-python.json
+
+# Generate Java SDK from generated spec
+.PHONY: sdk-java-generated
+sdk-java-generated:
+	@echo "==> Generating Java SDK from generated spec"
+	@npx openapi-generator-cli generate \
+		-i docs/openapi-generated.yaml \
+		-g java \
+		-o sdks/java \
+		-c configs/openapi-generator-java.json
+
+# Generate all SDKs from manual spec
+.PHONY: sdks
+sdks: sdk-go sdk-typescript sdk-python sdk-java
+	@echo "==> All SDKs generated successfully from manual spec"
+
+# Generate all code (templ templates + sqlc + go generate)
 .PHONY: generate
-generate: templ swagger sqlc-generate
+generate: templ sqlc-generate
 	@echo "==> Running go generate"
 	@go generate ./...
 
