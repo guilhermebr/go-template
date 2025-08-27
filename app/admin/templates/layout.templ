@@ -156,7 +156,9 @@ templ AdminNavbar(user *entities.User) {
 							 x-transition:leave-end="transform opacity-0 scale-95"
 							 x-on:click.outside="open = false"
 							 class="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 z-50">
-							<a href="/settings" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Settings</a>
+							if user.AccountType == entities.AccountTypeSuperAdmin {
+								<a href="/settings" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Settings</a>
+							}
 							<form method="POST" action="/logout">
 								<button type="submit" class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Sign out</button>
 							</form>
@@ -174,8 +176,10 @@ templ AdminSidebar(user *entities.User) {
 			<div class="flex-1 flex flex-col pt-5 pb-4 overflow-y-auto">
 				<nav class="mt-5 flex-1 px-2 space-y-1">
 					@NavItem("/dashboard", "Dashboard", "home")
-					@NavItem("/users", "User Management", "users") 
-					@NavItem("/settings", "System Settings", "cog")
+					@NavItem("/users", "User Management", "users")
+					if user.AccountType == entities.AccountTypeSuperAdmin {
+						@NavItem("/settings", "System Settings", "cog")
+					}
 					@NavItem("/logs", "System Logs", "document-text")
 					
 					<div class="pt-6">
@@ -221,8 +225,10 @@ templ AdminSidebar(user *entities.User) {
 				</div>
 				<nav class="mt-5 flex-1 px-2 space-y-1">
 					@NavItem("/dashboard", "Dashboard", "home")
-					@NavItem("/users", "User Management", "users") 
-					@NavItem("/settings", "System Settings", "cog")
+					@NavItem("/users", "User Management", "users")
+					if user.AccountType == entities.AccountTypeSuperAdmin {
+						@NavItem("/settings", "System Settings", "cog")
+					}
 					@NavItem("/logs", "System Logs", "document-text")
 				</nav>
 			</div>

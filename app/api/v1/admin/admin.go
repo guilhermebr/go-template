@@ -214,6 +214,26 @@ func (h *AdminHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get current user from context to validate permissions
+	claims, ok := middleware.GetUserFromContext(r.Context())
+	if !ok {
+		render.Status(r, http.StatusUnauthorized)
+		render.JSON(w, r, map[string]string{
+			"error": "unauthorized",
+		})
+		return
+	}
+
+	// Validate account type creation permissions
+	currentUserType := entities.AccountType(claims.AccountType)
+	if currentUserType == entities.AccountTypeAdmin && req.AccountType != entities.AccountTypeUser {
+		render.Status(r, http.StatusForbidden)
+		render.JSON(w, r, map[string]string{
+			"error": "regular admins can only create user accounts",
+		})
+		return
+	}
+
 	user, err := h.userUC.CreateUser(r.Context(), req.Email, req.Password, req.AuthProvider, req.AccountType)
 	if err != nil {
 		render.Status(r, http.StatusInternalServerError)
@@ -373,12 +393,50 @@ func (h *AdminHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check that admin is not deleting themselves
+	// Get current user from context to validate permissions
 	claims, ok := middleware.GetUserFromContext(r.Context())
-	if ok && claims.UserID == userID.String() {
+	if !ok {
+		render.Status(r, http.StatusUnauthorized)
+		render.JSON(w, r, map[string]string{
+			"error": "unauthorized",
+		})
+		return
+	}
+
+	// Check that admin is not deleting themselves
+	if claims.UserID == userID.String() {
 		render.Status(r, http.StatusBadRequest)
 		render.JSON(w, r, map[string]string{
 			"error": "cannot delete your own account",
+		})
+		return
+	}
+
+	// Get target user to validate account type permissions
+	targetUser, err := h.userUC.GetUserByID(r.Context(), userID)
+	if err != nil {
+		render.Status(r, http.StatusNotFound)
+		render.JSON(w, r, map[string]string{
+			"error": "user not found",
+		})
+		return
+	}
+
+	// Validate account type deletion permissions
+	currentUserType := entities.AccountType(claims.AccountType)
+	if currentUserType == entities.AccountTypeAdmin && targetUser.AccountType != entities.AccountTypeUser {
+		render.Status(r, http.StatusForbidden)
+		render.JSON(w, r, map[string]string{
+			"error": "regular admins can only delete user accounts",
+		})
+		return
+	}
+
+	// Super admins cannot delete other super admins (existing rule)
+	if targetUser.AccountType == entities.AccountTypeSuperAdmin {
+		render.Status(r, http.StatusForbidden)
+		render.JSON(w, r, map[string]string{
+			"error": "cannot delete super admin accounts",
 		})
 		return
 	}

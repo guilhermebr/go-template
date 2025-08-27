@@ -51,17 +51,23 @@ func NewRouter(handlers *Handlers, staticPath string) *chi.Mux {
 		r.Get("/dashboard", handlers.Dashboard)
 		r.Post("/logout", handlers.Logout)
 
-		// User management
+		// User management (all admins - validation handled in handlers)
 		r.Get("/users", handlers.UsersPage)
 		r.Get("/users/{id}", handlers.UserDetail)
-		r.Post("/users/create", handlers.CreateUser)
 		r.Post("/users/update", handlers.UpdateUser)
+		r.Post("/users/create", handlers.CreateUser)
 		r.Post("/users/delete", handlers.DeleteUser)
 
-		// Settings
-		r.Get("/settings", handlers.SettingsPage)
-		r.Post("/settings", handlers.UpdateSettings)
-		r.Get("/settings/auth-providers", handlers.GetAuthProviders)
+		// Settings (super admin only)
+		r.Group(func(r chi.Router) {
+			r.Get("/settings", handlers.SettingsPage)
+			r.Get("/settings/auth-providers", handlers.GetAuthProviders)
+		})
+
+		r.Group(func(r chi.Router) {
+			r.Use(handlers.RequireSuperAdmin)
+			r.Post("/settings", handlers.UpdateSettings)
+		})
 
 		// HTMX/API endpoints for dynamic updates
 		r.Route("/api", func(r chi.Router) {
@@ -88,6 +94,11 @@ func (h *Handlers) GetStatsAPI(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) GetUsersAPI(w http.ResponseWriter, r *http.Request) {
+	user := h.getUserFromContext(r)
+	if user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 	page := 1
 	pageSize := 20
 	if v := r.URL.Query().Get("page"); v != "" {
@@ -124,7 +135,7 @@ func (h *Handlers) GetUsersAPI(w http.ResponseWriter, r *http.Request) {
 
 	// Return users table as HTML fragment using templ component
 	w.Header().Set("Content-Type", "text/html")
-	_ = templates.UsersTable(users).Render(context.Background(), w)
+	_ = templates.UsersTable(users, user).Render(context.Background(), w)
 }
 
 func (h *Handlers) ToggleUserAPI(w http.ResponseWriter, r *http.Request) {

@@ -15,16 +15,18 @@ templ Users(user *entities.User, usersData *types.UserListResponse) {
 						Manage user accounts, permissions, and access levels.
 					</p>
 				</div>
-				<div class="mt-4 sm:mt-0 sm:ml-4 sm:flex-shrink-0">
-					<button type="button" 
-							onclick="openCreateUserModal()"
-							class="inline-flex items-center rounded-md bg-admin-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-admin-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-admin-600">
-						<svg class="-ml-0.5 mr-1.5 h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-							<path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z"/>
-						</svg>
-						Add User
-					</button>
-				</div>
+				if user.AccountType == entities.AccountTypeAdmin || user.AccountType == entities.AccountTypeSuperAdmin {
+					<div class="mt-4 sm:mt-0 sm:ml-4 sm:flex-shrink-0">
+						<button type="button" 
+								onclick="openCreateUserModal()"
+								class="inline-flex items-center rounded-md bg-admin-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-admin-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-admin-600">
+							<svg class="-ml-0.5 mr-1.5 h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+								<path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z"/>
+							</svg>
+							Add User
+						</button>
+					</div>
+				}
 			</div>
 		</div>
 
@@ -90,7 +92,7 @@ templ Users(user *entities.User, usersData *types.UserListResponse) {
 				 hx-get="/api/users" 
 				 hx-trigger="load"
 				 hx-indicator=".users-loading">
-				@UsersTable(usersData)
+				@UsersTable(usersData, user)
 			</div>
 		</div>
 
@@ -200,8 +202,10 @@ templ Users(user *entities.User, usersData *types.UserListResponse) {
 									class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-admin-500 focus:border-admin-500 sm:text-sm">
 								<option value="">Select account type</option>
 								<option value="user">Regular User</option>
-								<option value="admin">Administrator</option>
-								<option value="super_admin">Super Administrator</option>
+								if user.AccountType == entities.AccountTypeSuperAdmin {
+									<option value="admin">Administrator</option>
+									<option value="super_admin">Super Administrator</option>
+								}
 							</select>
 							<div class="mt-1 text-sm text-red-600 hidden" id="account-type-error"></div>
 						</div>
@@ -425,7 +429,7 @@ templ Users(user *entities.User, usersData *types.UserListResponse) {
 	}
 }
 
-templ UsersTable(usersData *types.UserListResponse) {
+templ UsersTable(usersData *types.UserListResponse, currentUser *entities.User) {
 	<div class="bg-white shadow overflow-hidden sm:rounded-lg">
 		if usersData == nil || len(usersData.Users) == 0 {
 			<div class="text-center py-12">
@@ -457,14 +461,14 @@ templ UsersTable(usersData *types.UserListResponse) {
 			<!-- User rows -->
 			<ul role="list" class="divide-y divide-gray-200">
 				for _, targetUser := range usersData.Users {
-					@UserRow(&targetUser)
+					@UserRow(&targetUser, currentUser)
 				}
 			</ul>
 		}
 	</div>
 }
 
-templ UserRow(targetUser *entities.User) {
+templ UserRow(targetUser *entities.User, currentUser *entities.User) {
 	<li class="px-6 py-4 hover:bg-gray-50">
 		<!-- Desktop layout -->
 		<div class="hidden sm:block">
@@ -523,7 +527,7 @@ templ UserRow(targetUser *entities.User) {
 						Edit
 					</button>
 					
-					if targetUser.AccountType != entities.AccountTypeSuperAdmin {
+					if (currentUser.AccountType == entities.AccountTypeAdmin || currentUser.AccountType == entities.AccountTypeSuperAdmin) && targetUser.AccountType != entities.AccountTypeSuperAdmin {
 						<button type="button" 
 								onclick={ confirmDeleteUser(targetUser.ID.String(), targetUser.Email) }
 								class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-200">
@@ -579,7 +583,7 @@ templ UserRow(targetUser *entities.User) {
 						</svg>
 					</button>
 					
-					if targetUser.AccountType != entities.AccountTypeSuperAdmin {
+					if (currentUser.AccountType == entities.AccountTypeAdmin || currentUser.AccountType == entities.AccountTypeSuperAdmin) && targetUser.AccountType != entities.AccountTypeSuperAdmin {
 						<button type="button" 
 								onclick={ confirmDeleteUser(targetUser.ID.String(), targetUser.Email) }
 								class="inline-flex items-center p-1.5 border border-transparent text-xs font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">

@@ -71,22 +71,24 @@ func (h *AdminHandler) Routes() chi.Router {
 		// Dashboard stats
 		r.Get("/dashboard/stats", h.GetDashboardStats)
 
-		// User management
+		// User management (all admins - validation handled in handlers)
 		r.Route("/users", func(r chi.Router) {
-			r.Post("/", h.CreateUser)
 			r.Get("/", h.ListUsers)
 			r.Get("/{id}", h.GetUser)
 			r.Put("/{id}", h.UpdateUser)
+			r.Post("/", h.CreateUser)
 			r.Delete("/{id}", h.DeleteUser)
 			r.Get("/stats", h.GetUserStats)
 		})
 
+		// System settings (admin read-only)
+		r.Get("/settings", h.GetSettings)
+		r.Get("/settings/auth-providers", h.GetAvailableAuthProviders)
+
 		// System settings (super admin only)
 		r.Group(func(r chi.Router) {
 			r.Use(h.authMw.RequireSuperAdmin)
-			r.Get("/settings", h.GetSettings)
 			r.Put("/settings", h.UpdateSettings)
-			r.Get("/settings/auth-providers", h.GetAvailableAuthProviders)
 		})
 	})
 

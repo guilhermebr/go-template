@@ -81,6 +81,30 @@ func (h *Handlers) getUserFromContext(r *http.Request) *entities.User {
 	return nil
 }
 
+// RequireSuperAdmin middleware ensures only super admin users can access the route
+func (h *Handlers) RequireSuperAdmin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user := h.getUserFromContext(r)
+		if user == nil {
+			http.Redirect(w, r, "/login", http.StatusFound)
+			return
+		}
+
+		if user.AccountType != entities.AccountTypeSuperAdmin {
+			// For HTMX requests, return error
+			if r.Header.Get("HX-Request") == "true" {
+				http.Error(w, "Access denied: super admin privileges required", http.StatusForbidden)
+				return
+			}
+			// For regular requests, redirect to dashboard
+			http.Redirect(w, r, "/dashboard?error=access_denied", http.StatusFound)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
 // Page handlers
 func (h *Handlers) LoginPage(w http.ResponseWriter, r *http.Request) {
 	// If already authenticated, redirect to dashboard
@@ -286,7 +310,7 @@ func (h *Handlers) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("Content-Type", "text/html")
 		w.Write([]byte(`<div id="users-table">`))
-		_ = templates.UsersTable(users).Render(context.Background(), w)
+		_ = templates.UsersTable(users, user).Render(context.Background(), w)
 		w.Write([]byte(`</div>`))
 		return
 	}
@@ -307,6 +331,16 @@ func (h *Handlers) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate user can create accounts (all admins can create, but with restrictions)
+	if user.AccountType != entities.AccountTypeAdmin && user.AccountType != entities.AccountTypeSuperAdmin {
+		if r.Header.Get("HX-Request") == "true" {
+			http.Error(w, "Access denied: admin privileges required", http.StatusForbidden)
+		} else {
+			http.Redirect(w, r, "/dashboard?error=access_denied", http.StatusFound)
+		}
+		return
+	}
+
 	email := r.FormValue("email")
 	password := r.FormValue("password")
 	accountTypeStr := r.FormValue("account_type")
@@ -318,6 +352,17 @@ func (h *Handlers) CreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	accountType := entities.AccountType(accountTypeStr)
+
+	// Validate account type creation permissions
+	if user.AccountType == entities.AccountTypeAdmin && accountType != entities.AccountTypeUser {
+		if r.Header.Get("HX-Request") == "true" {
+			http.Error(w, "Regular admins can only create user accounts", http.StatusForbidden)
+		} else {
+			http.Redirect(w, r, "/users?error=invalid_account_type", http.StatusFound)
+		}
+		return
+	}
+
 	req := CreateUserRequest{
 		Email:        email,
 		Password:     password,
@@ -342,7 +387,7 @@ func (h *Handlers) CreateUser(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("Content-Type", "text/html")
 		w.Write([]byte(`<div id="users-table">`))
-		_ = templates.UsersTable(users).Render(context.Background(), w)
+		_ = templates.UsersTable(users, user).Render(context.Background(), w)
 		w.Write([]byte(`</div>`))
 		return
 	}
@@ -363,9 +408,47 @@ func (h *Handlers) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate user can delete accounts (all admins can delete, but with restrictions)
+	if user.AccountType != entities.AccountTypeAdmin && user.AccountType != entities.AccountTypeSuperAdmin {
+		if r.Header.Get("HX-Request") == "true" {
+			http.Error(w, "Access denied: admin privileges required", http.StatusForbidden)
+		} else {
+			http.Redirect(w, r, "/dashboard?error=access_denied", http.StatusFound)
+		}
+		return
+	}
+
 	userID := r.FormValue("user_id")
 	if userID == "" {
 		http.Error(w, "User ID required", http.StatusBadRequest)
+		return
+	}
+
+	// Get the target user to check their account type
+	targetUser, err := h.client.GetUser(userID)
+	if err != nil {
+		h.logger.Error("failed to get target user", slog.String("error", err.Error()))
+		http.Error(w, "User not found", http.StatusNotFound)
+		return
+	}
+
+	// Validate account type deletion permissions
+	if user.AccountType == entities.AccountTypeAdmin && targetUser.AccountType != entities.AccountTypeUser {
+		if r.Header.Get("HX-Request") == "true" {
+			http.Error(w, "Regular admins can only delete user accounts", http.StatusForbidden)
+		} else {
+			http.Redirect(w, r, "/users?error=insufficient_permissions", http.StatusFound)
+		}
+		return
+	}
+
+	// Super admins cannot delete other super admins (existing rule)
+	if targetUser.AccountType == entities.AccountTypeSuperAdmin {
+		if r.Header.Get("HX-Request") == "true" {
+			http.Error(w, "Cannot delete super admin accounts", http.StatusForbidden)
+		} else {
+			http.Redirect(w, r, "/users?error=cannot_delete_superadmin", http.StatusFound)
+		}
 		return
 	}
 
@@ -396,7 +479,7 @@ func (h *Handlers) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("Content-Type", "text/html")
 		w.Write([]byte(`<div id="users-table">`))
-		_ = templates.UsersTable(users).Render(context.Background(), w)
+		_ = templates.UsersTable(users, user).Render(context.Background(), w)
 		w.Write([]byte(`</div>`))
 		return
 	}
@@ -409,6 +492,12 @@ func (h *Handlers) SettingsPage(w http.ResponseWriter, r *http.Request) {
 	user := h.getUserFromContext(r)
 	if user == nil {
 		http.Redirect(w, r, "/login", http.StatusFound)
+		return
+	}
+
+	// Double-check super admin access (middleware should already protect this)
+	if user.AccountType != entities.AccountTypeSuperAdmin {
+		http.Redirect(w, r, "/dashboard?error=access_denied", http.StatusFound)
 		return
 	}
 
@@ -434,6 +523,12 @@ func (h *Handlers) GetAuthProviders(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Double-check super admin access (middleware should already protect this)
+	if user.AccountType == entities.AccountTypeUser {
+		http.Error(w, "Access denied: admin privileges required", http.StatusForbidden)
+		return
+	}
+
 	providers, err := h.client.GetAuthProviders()
 	if err != nil {
 		h.logger.Error("failed to get auth providers", slog.String("error", err.Error()))
@@ -449,10 +544,10 @@ func (h *Handlers) GetAuthProviders(w http.ResponseWriter, r *http.Request) {
 	// Convert response to HTML options
 	w.Header().Set("Content-Type", "text/html")
 	w.Write([]byte(`<option value="">Select authentication provider</option>`))
-	
+
 	if availableProviders, ok := providers["available_providers"].([]interface{}); ok {
 		defaultProvider, _ := providers["default_provider"].(string)
-		
+
 		for _, provider := range availableProviders {
 			if providerStr, ok := provider.(string); ok {
 				selected := ""
@@ -474,6 +569,12 @@ func (h *Handlers) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 	user := h.getUserFromContext(r)
 	if user == nil {
 		http.Redirect(w, r, "/login", http.StatusFound)
+		return
+	}
+
+	// Double-check super admin access (middleware should already protect this)
+	if user.AccountType != entities.AccountTypeSuperAdmin {
+		http.Redirect(w, r, "/dashboard?error=access_denied", http.StatusFound)
 		return
 	}
 
@@ -505,7 +606,7 @@ func (h *Handlers) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 		// Default to supabase if none selected
 		availableProviders = []string{"supabase"}
 	}
-	
+
 	defaultAuthProvider := r.FormValue("default_auth_provider")
 	if defaultAuthProvider == "" {
 		defaultAuthProvider = "supabase"
