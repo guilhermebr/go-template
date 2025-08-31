@@ -3,46 +3,38 @@ package web
 import (
 	"context"
 	"go-template/app/web/templates"
+	gweb "go-template/gateways/web"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 )
 
-const (
-	CookieToken    = "web_token"
-	CookieUserID   = "web_user_id"
-	CookieUserEmail = "web_user_email"
-)
-
 // Handlers contains the HTTP handlers for the web application
 type Handlers struct {
-	client       *Client
-	logger       *slog.Logger
-	cookieMaxAge int
-	cookieSecure bool
-	cookieDomain string
+	client     *gweb.Client
+	logger     *slog.Logger
+	auth       *AuthMiddleware
+	fileServer http.Handler
 }
 
 // NewHandlers creates a new Handlers instance
-func NewHandlers(client *Client, logger *slog.Logger, cookieMaxAge int, cookieSecure bool, cookieDomain string) *Handlers {
+func NewHandlers(client *gweb.Client, logger *slog.Logger, auth *AuthMiddleware, staticPath string) *Handlers {
 	return &Handlers{
-		client:       client,
-		logger:       logger,
-		cookieMaxAge: cookieMaxAge,
-		cookieSecure: cookieSecure,
-		cookieDomain: cookieDomain,
+		client:     client,
+		logger:     logger,
+		auth:       auth,
+		fileServer: http.FileServer(http.Dir(staticPath)),
 	}
 }
 
 // HomePage renders the home/landing page
 func (h *Handlers) HomePage(w http.ResponseWriter, r *http.Request) {
 	user := GetUserFromContext(r)
-	
+
 	// If user is authenticated, redirect to dashboard
 	if user != nil {
 		http.Redirect(w, r, "/dashboard", http.StatusFound)
@@ -100,7 +92,7 @@ func (h *Handlers) LoginSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	loginReq := LoginRequest{
+	loginReq := gweb.LoginRequest{
 		Email:    email,
 		Password: password,
 	}
@@ -119,7 +111,7 @@ func (h *Handlers) LoginSubmit(w http.ResponseWriter, r *http.Request) {
 	h.logger.Info("login successful", slog.String("email", email), slog.String("user_id", resp.User.ID.String()))
 
 	// Set auth cookies
-	h.setAuthCookies(w, resp)
+	h.auth.setAuthCookies(w, resp)
 
 	// Redirect to original destination or dashboard
 	if redirectTo == "" {
@@ -169,7 +161,7 @@ func (h *Handlers) RegisterSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	registerReq := RegisterRequest{
+	registerReq := gweb.RegisterRequest{
 		Email:    email,
 		Password: password,
 	}
@@ -186,7 +178,7 @@ func (h *Handlers) RegisterSubmit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Set auth cookies
-	h.setAuthCookies(w, resp)
+	h.auth.setAuthCookies(w, resp)
 
 	// Redirect to dashboard
 	http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
@@ -233,7 +225,7 @@ func (h *Handlers) Profile(w http.ResponseWriter, r *http.Request) {
 // Logout handles user logout
 func (h *Handlers) Logout(w http.ResponseWriter, r *http.Request) {
 	// Clear auth cookies
-	h.clearAuthCookies(w)
+	h.auth.clearAuthCookies(w)
 
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
@@ -268,99 +260,6 @@ func (h *Handlers) DocsProxy(w http.ResponseWriter, r *http.Request) {
 	if _, err := io.Copy(w, resp.Body); err != nil {
 		h.logger.Error("failed to copy response body", slog.String("error", err.Error()))
 	}
-}
-
-// Cookie management methods
-
-func (h *Handlers) setAuthCookies(w http.ResponseWriter, resp *AuthResponse) {
-	maxAge := h.cookieMaxAge
-	
-	// Don't set domain for localhost in development
-	var domain string
-	if h.cookieDomain != "localhost" && h.cookieDomain != "" {
-		domain = h.cookieDomain
-	}
-	
-	http.SetCookie(w, &http.Cookie{
-		Name:     CookieToken,
-		Value:    resp.Token,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   h.cookieSecure,
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   maxAge,
-		Expires:  time.Now().Add(time.Duration(maxAge) * time.Second),
-		Domain:   domain,
-	})
-	
-	http.SetCookie(w, &http.Cookie{
-		Name:     CookieUserID,
-		Value:    resp.User.ID.String(),
-		Path:     "/",
-		HttpOnly: false,
-		Secure:   h.cookieSecure,
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   maxAge,
-		Expires:  time.Now().Add(time.Duration(maxAge) * time.Second),
-		Domain:   domain,
-	})
-	
-	http.SetCookie(w, &http.Cookie{
-		Name:     CookieUserEmail,
-		Value:    resp.User.Email,
-		Path:     "/",
-		HttpOnly: false,
-		Secure:   h.cookieSecure,
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   maxAge,
-		Expires:  time.Now().Add(time.Duration(maxAge) * time.Second),
-		Domain:   domain,
-	})
-}
-
-func (h *Handlers) clearAuthCookies(w http.ResponseWriter) {
-	cookieNames := []string{CookieToken, CookieUserID, CookieUserEmail}
-	
-	// Don't set domain for localhost in development
-	var domain string
-	if h.cookieDomain != "localhost" && h.cookieDomain != "" {
-		domain = h.cookieDomain
-	}
-	
-	for _, name := range cookieNames {
-		http.SetCookie(w, &http.Cookie{
-			Name:     name,
-			Value:    "",
-			Path:     "/",
-			HttpOnly: name == CookieToken,
-			Secure:   h.cookieSecure,
-			SameSite: http.SameSiteLaxMode,
-			MaxAge:   -1,
-			Expires:  time.Unix(0, 0),
-			Domain:   domain,
-		})
-	}
-}
-
-// Utility functions
-
-func getCookieValue(r *http.Request, name string) string {
-	c, err := r.Cookie(name)
-	if err != nil {
-		return ""
-	}
-	return c.Value
-}
-
-func clearCookie(w http.ResponseWriter, name string) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     name,
-		Value:    "",
-		Path:     "/",
-		HttpOnly: name == CookieToken,
-		MaxAge:   -1,
-		Expires:  time.Unix(0, 0),
-	})
 }
 
 func renderTemplate(w http.ResponseWriter, templateName string, data map[string]interface{}) error {

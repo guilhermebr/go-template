@@ -6,103 +6,28 @@ import (
 	"fmt"
 	"go-template/app/admin/templates"
 	"go-template/domain/entities"
-	"go-template/internal/types"
+	gweb "go-template/gateways/web"
 	"log/slog"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/gofrs/uuid/v5"
-)
-
-type contextKey string
-
-const userContextKey contextKey = "user"
-
-const (
-	CookieToken       = "admin_token"
-	CookieUserID      = "admin_user_id"
-	CookieUserEmail   = "admin_user_email"
-	CookieAccountType = "admin_account_type"
-	CookieExpiresAt   = "admin_expires_at"
 )
 
 type Handlers struct {
-	client       *Client
-	logger       *slog.Logger
-	cookieMaxAge int
+	client     *gweb.Client
+	auth       *AuthMiddleware
+	logger     *slog.Logger
+	fileServer http.Handler
 }
 
-func NewHandlers(client *Client, cookieMaxAge int, logger *slog.Logger) *Handlers {
+func NewHandlers(client *gweb.Client, auth *AuthMiddleware, logger *slog.Logger, staticPath string) *Handlers {
 	return &Handlers{
-		client:       client,
-		logger:       logger,
-		cookieMaxAge: cookieMaxAge,
+		client:     client,
+		auth:       auth,
+		logger:     logger,
+		fileServer: http.FileServer(http.Dir(staticPath)),
 	}
-}
-
-// Auth middleware
-func (h *Handlers) RequireAuth(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		token := getCookieValue(r, CookieToken)
-		if token == "" {
-			http.Redirect(w, r, "/login", http.StatusFound)
-			return
-		}
-
-		// Set token in client and verify
-		h.client.SetAuthToken(token)
-		if err := h.client.VerifyToken(); err != nil {
-			h.clearAuthCookies(w)
-			http.Redirect(w, r, "/login", http.StatusFound)
-			return
-		}
-
-		// Build user context from cookies (minimal fields)
-		var user entities.User
-		if idStr := getCookieValue(r, CookieUserID); idStr != "" {
-			if id, err := uuid.FromString(idStr); err == nil {
-				user.ID = id
-			}
-		}
-		user.Email = getCookieValue(r, CookieUserEmail)
-		user.AccountType = entities.AccountType(getCookieValue(r, CookieAccountType))
-
-		ctx := context.WithValue(r.Context(), userContextKey, user)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
-}
-
-func (h *Handlers) getUserFromContext(r *http.Request) *entities.User {
-	if user, ok := r.Context().Value(userContextKey).(entities.User); ok {
-		return &user
-	}
-	return nil
-}
-
-// RequireSuperAdmin middleware ensures only super admin users can access the route
-func (h *Handlers) RequireSuperAdmin(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		user := h.getUserFromContext(r)
-		if user == nil {
-			http.Redirect(w, r, "/login", http.StatusFound)
-			return
-		}
-
-		if user.AccountType != entities.AccountTypeSuperAdmin {
-			// For HTMX requests, return error
-			if r.Header.Get("HX-Request") == "true" {
-				http.Error(w, "Access denied: super admin privileges required", http.StatusForbidden)
-				return
-			}
-			// For regular requests, redirect to dashboard
-			http.Redirect(w, r, "/dashboard?error=access_denied", http.StatusFound)
-			return
-		}
-
-		next.ServeHTTP(w, r)
-	})
 }
 
 // Page handlers
@@ -143,14 +68,14 @@ func (h *Handlers) LoginSubmit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Set auth cookies
-	h.setAuthCookies(w, resp)
+	h.auth.setAuthCookies(w, resp)
 
 	http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
 }
 
 func (h *Handlers) Logout(w http.ResponseWriter, r *http.Request) {
 	// Clear cookies
-	h.clearAuthCookies(w)
+	h.auth.clearAuthCookies(w)
 
 	// Call API logout
 	h.client.AdminLogout()
@@ -159,8 +84,9 @@ func (h *Handlers) Logout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) Dashboard(w http.ResponseWriter, r *http.Request) {
-	user := h.getUserFromContext(r)
+	user := GetUserFromContext(r)
 	if user == nil {
+		slog.Error("user not found in context")
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
@@ -168,7 +94,7 @@ func (h *Handlers) Dashboard(w http.ResponseWriter, r *http.Request) {
 	stats, err := h.client.GetDashboardStats()
 	if err != nil {
 		h.logger.Error("failed to get dashboard stats", slog.String("error", err.Error()))
-		stats = &types.DashboardStats{} // Use empty stats on error
+		stats = &entities.DashboardStats{} // Use empty stats on error
 	}
 
 	data := map[string]interface{}{
@@ -181,8 +107,9 @@ func (h *Handlers) Dashboard(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) UsersPage(w http.ResponseWriter, r *http.Request) {
-	user := h.getUserFromContext(r)
+	user := GetUserFromContext(r)
 	if user == nil {
+		slog.Error("user not found in context")
 		http.Redirect(w, r, "/login", http.StatusFound)
 		return
 	}
@@ -209,7 +136,7 @@ func (h *Handlers) UsersPage(w http.ResponseWriter, r *http.Request) {
 	users, err := h.client.ListUsersWithFilter(page, pageSize, search, accountType)
 	if err != nil {
 		h.logger.Error("failed to get users", slog.String("error", err.Error()))
-		users = &types.UserListResponse{} // Use empty response on error
+		users = &entities.UserListResponse{} // Use empty response on error
 	}
 
 	data := map[string]interface{}{
@@ -222,7 +149,7 @@ func (h *Handlers) UsersPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) UserDetail(w http.ResponseWriter, r *http.Request) {
-	user := h.getUserFromContext(r)
+	user := GetUserFromContext(r)
 	if user == nil {
 		http.Redirect(w, r, "/login", http.StatusFound)
 		return
@@ -258,7 +185,7 @@ func (h *Handlers) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user := h.getUserFromContext(r)
+	user := GetUserFromContext(r)
 	if user == nil {
 		http.Redirect(w, r, "/login", http.StatusFound)
 		return
@@ -274,7 +201,7 @@ func (h *Handlers) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	accountTypeStr := r.FormValue("account_type")
 	accountType := entities.AccountType(accountTypeStr)
 
-	req := UpdateUserRequest{
+	req := gweb.UpdateUserRequest{
 		AccountType: accountType,
 	}
 
@@ -306,7 +233,7 @@ func (h *Handlers) UpdateUser(w http.ResponseWriter, r *http.Request) {
 
 		users, err := h.client.ListUsers(page, pageSize)
 		if err != nil {
-			users = &types.UserListResponse{}
+			users = &entities.UserListResponse{}
 		}
 		w.Header().Set("Content-Type", "text/html")
 		w.Write([]byte(`<div id="users-table">`))
@@ -325,7 +252,7 @@ func (h *Handlers) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user := h.getUserFromContext(r)
+	user := GetUserFromContext(r)
 	if user == nil {
 		http.Redirect(w, r, "/login", http.StatusFound)
 		return
@@ -363,7 +290,7 @@ func (h *Handlers) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req := CreateUserRequest{
+	req := gweb.CreateUserRequest{
 		Email:        email,
 		Password:     password,
 		AccountType:  accountType,
@@ -383,7 +310,7 @@ func (h *Handlers) CreateUser(w http.ResponseWriter, r *http.Request) {
 		pageSize := 20
 		users, err := h.client.ListUsers(page, pageSize)
 		if err != nil {
-			users = &types.UserListResponse{}
+			users = &entities.UserListResponse{}
 		}
 		w.Header().Set("Content-Type", "text/html")
 		w.Write([]byte(`<div id="users-table">`))
@@ -402,7 +329,7 @@ func (h *Handlers) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user := h.getUserFromContext(r)
+	user := GetUserFromContext(r)
 	if user == nil {
 		http.Redirect(w, r, "/login", http.StatusFound)
 		return
@@ -475,7 +402,7 @@ func (h *Handlers) DeleteUser(w http.ResponseWriter, r *http.Request) {
 
 		users, err := h.client.ListUsers(page, pageSize)
 		if err != nil {
-			users = &types.UserListResponse{}
+			users = &entities.UserListResponse{}
 		}
 		w.Header().Set("Content-Type", "text/html")
 		w.Write([]byte(`<div id="users-table">`))
@@ -489,7 +416,7 @@ func (h *Handlers) DeleteUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) SettingsPage(w http.ResponseWriter, r *http.Request) {
-	user := h.getUserFromContext(r)
+	user := GetUserFromContext(r)
 	if user == nil {
 		http.Redirect(w, r, "/login", http.StatusFound)
 		return
@@ -504,7 +431,7 @@ func (h *Handlers) SettingsPage(w http.ResponseWriter, r *http.Request) {
 	settings, err := h.client.GetSettings()
 	if err != nil {
 		h.logger.Error("failed to get settings", slog.String("error", err.Error()))
-		settings = &types.SystemSettings{} // Use empty settings on error
+		settings = &entities.SystemSettings{} // Use empty settings on error
 	}
 
 	data := map[string]interface{}{
@@ -517,7 +444,7 @@ func (h *Handlers) SettingsPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) GetAuthProviders(w http.ResponseWriter, r *http.Request) {
-	user := h.getUserFromContext(r)
+	user := GetUserFromContext(r)
 	if user == nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
@@ -566,7 +493,7 @@ func (h *Handlers) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user := h.getUserFromContext(r)
+	user := GetUserFromContext(r)
 	if user == nil {
 		http.Redirect(w, r, "/login", http.StatusFound)
 		return
@@ -612,7 +539,7 @@ func (h *Handlers) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 		defaultAuthProvider = "supabase"
 	}
 
-	settings := types.SystemSettings{
+	settings := entities.SystemSettings{
 		MaintenanceMode:        r.FormValue("maintenance_mode") == "on",
 		RegistrationEnabled:    r.FormValue("registration_enabled") == "on",
 		EmailNotifications:     r.FormValue("email_notifications") == "on",
@@ -634,6 +561,74 @@ func (h *Handlers) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/settings", http.StatusFound)
 }
 
+// Additional API endpoints for HTMX responses
+func (h *Handlers) GetStatsAPI(w http.ResponseWriter, r *http.Request) {
+	stats, err := h.client.GetDashboardStats()
+	if err != nil {
+		http.Error(w, "Failed to get stats", http.StatusInternalServerError)
+		return
+	}
+
+	// Return stats as HTML fragment using templ component
+	w.Header().Set("Content-Type", "text/html")
+	_ = templates.StatsCards(stats).Render(context.Background(), w)
+}
+
+func (h *Handlers) GetUsersAPI(w http.ResponseWriter, r *http.Request) {
+	user := GetUserFromContext(r)
+	if user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	page := 1
+	pageSize := 20
+	if v := r.URL.Query().Get("page"); v != "" {
+		if p, err := strconv.Atoi(v); err == nil && p > 0 {
+			page = p
+		}
+	}
+	if v := r.URL.Query().Get("limit"); v != "" {
+		if ps, err := strconv.Atoi(v); err == nil && ps > 0 && ps <= 100 {
+			pageSize = ps
+		}
+	} else if v := r.URL.Query().Get("page_size"); v != "" {
+		if ps, err := strconv.Atoi(v); err == nil && ps > 0 && ps <= 100 {
+			pageSize = ps
+		}
+	}
+
+	// Get search and filter parameters
+	search := r.URL.Query().Get("search")
+	accountType := r.URL.Query().Get("account_type")
+
+	users, err := h.client.ListUsersWithFilter(page, pageSize, search, accountType)
+	if err != nil {
+		http.Error(w, "Failed to get users", http.StatusInternalServerError)
+		return
+	}
+
+	// Check if this is a request for recent users (dashboard)
+	if r.URL.Query().Get("limit") == "5" {
+		w.Header().Set("Content-Type", "text/html")
+		_ = templates.RecentUsers(users.Users).Render(context.Background(), w)
+		return
+	}
+
+	// Return users table as HTML fragment using templ component
+	w.Header().Set("Content-Type", "text/html")
+	_ = templates.UsersTable(users, user).Render(context.Background(), w)
+}
+
+func (h *Handlers) ToggleUserAPI(w http.ResponseWriter, r *http.Request) {
+	_ = chi.URLParam(r, "id") // userID for future implementation
+
+	// This is a placeholder for user status toggle functionality
+	// You would implement the actual toggle logic here
+
+	w.Header().Set("Content-Type", "text/html")
+	w.Write([]byte(`<span class="text-green-600">Active</span>`))
+}
+
 // Template rendering using templ templates
 func renderTemplate(w http.ResponseWriter, templateName string, data map[string]interface{}) {
 	w.Header().Set("Content-Type", "text/html")
@@ -647,21 +642,21 @@ func renderTemplate(w http.ResponseWriter, templateName string, data map[string]
 		}
 	case "dashboard.templ":
 		user, _ := data["User"].(*entities.User)
-		stats, _ := data["Stats"].(*types.DashboardStats)
+		stats, _ := data["Stats"].(*entities.DashboardStats)
 		err := templates.Dashboard(user, stats).Render(context.Background(), w)
 		if err != nil {
 			http.Error(w, "Failed to render dashboard template", http.StatusInternalServerError)
 		}
 	case "users.templ":
 		user, _ := data["User"].(*entities.User)
-		users, _ := data["Users"].(*types.UserListResponse)
+		users, _ := data["Users"].(*entities.UserListResponse)
 		err := templates.Users(user, users).Render(context.Background(), w)
 		if err != nil {
 			http.Error(w, "Failed to render users template", http.StatusInternalServerError)
 		}
 	case "settings.templ":
 		user, _ := data["User"].(*entities.User)
-		settings, _ := data["Settings"].(*types.SystemSettings)
+		settings, _ := data["Settings"].(*entities.SystemSettings)
 		err := templates.Settings(user, settings).Render(context.Background(), w)
 		if err != nil {
 			http.Error(w, "Failed to render settings template", http.StatusInternalServerError)
@@ -669,82 +664,4 @@ func renderTemplate(w http.ResponseWriter, templateName string, data map[string]
 	default:
 		http.Error(w, "Template not found", http.StatusNotFound)
 	}
-}
-
-// Cookie helpers
-func (h *Handlers) setAuthCookies(w http.ResponseWriter, resp *LoginResponse) {
-	maxAge := h.cookieMaxAge
-	http.SetCookie(w, &http.Cookie{
-		Name:     CookieToken,
-		Value:    resp.Token,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   false,
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   maxAge,
-		Expires:  time.Now().Add(time.Duration(maxAge) * time.Second),
-	})
-	http.SetCookie(w, &http.Cookie{
-		Name:     CookieUserID,
-		Value:    resp.User.ID.String(),
-		Path:     "/",
-		HttpOnly: false,
-		Secure:   false,
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   maxAge,
-		Expires:  time.Now().Add(time.Duration(maxAge) * time.Second),
-	})
-	http.SetCookie(w, &http.Cookie{
-		Name:     CookieUserEmail,
-		Value:    resp.User.Email,
-		Path:     "/",
-		HttpOnly: false,
-		Secure:   false,
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   maxAge,
-		Expires:  time.Now().Add(time.Duration(maxAge) * time.Second),
-	})
-	http.SetCookie(w, &http.Cookie{
-		Name:     CookieAccountType,
-		Value:    resp.AccountType,
-		Path:     "/",
-		HttpOnly: false,
-		Secure:   false,
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   maxAge,
-		Expires:  time.Now().Add(time.Duration(maxAge) * time.Second),
-	})
-	http.SetCookie(w, &http.Cookie{
-		Name:     CookieExpiresAt,
-		Value:    resp.ExpiresAt.Format(time.RFC3339),
-		Path:     "/",
-		HttpOnly: false,
-		Secure:   false,
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   maxAge,
-		Expires:  time.Now().Add(time.Duration(maxAge) * time.Second),
-	})
-}
-
-func (h *Handlers) clearAuthCookies(w http.ResponseWriter) {
-	for _, name := range []string{CookieToken, CookieUserID, CookieUserEmail, CookieAccountType, CookieExpiresAt} {
-		http.SetCookie(w, &http.Cookie{
-			Name:     name,
-			Value:    "",
-			Path:     "/",
-			HttpOnly: name == CookieToken,
-			Secure:   false,
-			SameSite: http.SameSiteLaxMode,
-			MaxAge:   -1,
-			Expires:  time.Unix(0, 0),
-		})
-	}
-}
-
-func getCookieValue(r *http.Request, name string) string {
-	c, err := r.Cookie(name)
-	if err != nil {
-		return ""
-	}
-	return c.Value
 }

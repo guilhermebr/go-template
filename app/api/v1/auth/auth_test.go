@@ -51,7 +51,7 @@ func TestAuthHandler_Register_Success(t *testing.T) {
 
 	jwtService := createTestJWTService()
 
-	h := NewAuthHandler(authUC, userUC, jwtService)
+	h := NewAuthHandler(authUC, userUC, jwtService, apiMiddleware.NewAuthMiddleware(jwtService))
 
 	body, _ := json.Marshal(RegisterRequest{Email: "a@b.com", Password: "123456"})
 	req := httptest.NewRequest(http.MethodPost, "/register", bytes.NewBuffer(body))
@@ -87,7 +87,7 @@ func TestAuthHandler_Register_InvalidJSON(t *testing.T) {
 
 	jwtService := createTestJWTService()
 
-	h := NewAuthHandler(authUC, userUC, jwtService)
+	h := NewAuthHandler(authUC, userUC, jwtService, apiMiddleware.NewAuthMiddleware(jwtService))
 
 	req := httptest.NewRequest(http.MethodPost, "/register", bytes.NewBuffer([]byte("invalid json")))
 	w := httptest.NewRecorder()
@@ -117,7 +117,7 @@ func TestAuthHandler_Register_ValidationFailed(t *testing.T) {
 
 	jwtService := createTestJWTService()
 
-	h := NewAuthHandler(authUC, userUC, jwtService)
+	h := NewAuthHandler(authUC, userUC, jwtService, apiMiddleware.NewAuthMiddleware(jwtService))
 
 	// Invalid email and short password
 	body, _ := json.Marshal(RegisterRequest{Email: "invalid-email", Password: "123"})
@@ -149,7 +149,7 @@ func TestAuthHandler_Register_CreateUserFailed(t *testing.T) {
 
 	jwtService := createTestJWTService()
 
-	h := NewAuthHandler(authUC, userUC, jwtService)
+	h := NewAuthHandler(authUC, userUC, jwtService, apiMiddleware.NewAuthMiddleware(jwtService))
 
 	body, _ := json.Marshal(RegisterRequest{Email: "a@b.com", Password: "123456"})
 	req := httptest.NewRequest(http.MethodPost, "/register", bytes.NewBuffer(body))
@@ -161,7 +161,6 @@ func TestAuthHandler_Register_CreateUserFailed(t *testing.T) {
 		t.Fatalf("expected 500, got %d", w.Code)
 	}
 }
-
 
 func TestAuthHandler_Login_Success(t *testing.T) {
 	userUC := &mocks.UserUseCaseMock{
@@ -184,7 +183,7 @@ func TestAuthHandler_Login_Success(t *testing.T) {
 
 	jwtService := createTestJWTService()
 
-	h := NewAuthHandler(authUC, userUC, jwtService)
+	h := NewAuthHandler(authUC, userUC, jwtService, apiMiddleware.NewAuthMiddleware(jwtService))
 
 	body, _ := json.Marshal(auth.LoginRequest{Email: "a@b.com", Password: "123456"})
 	req := httptest.NewRequest(http.MethodPost, "/login", bytes.NewBuffer(body))
@@ -220,15 +219,15 @@ func TestAuthHandler_GetMe_Success(t *testing.T) {
 
 	jwtService := createTestJWTService()
 
-	h := NewAuthHandler(authUC, userUC, jwtService)
+	h := NewAuthHandler(authUC, userUC, jwtService, apiMiddleware.NewAuthMiddleware(jwtService))
 
 	req := httptest.NewRequest(http.MethodGet, "/me", nil)
-	
+
 	// Add mock claims to context
 	claims := &jwt.Claims{UserID: uuid.Must(uuid.NewV4()).String()}
 	ctx := context.WithValue(req.Context(), apiMiddleware.UserContextKey, claims)
 	req = req.WithContext(ctx)
-	
+
 	w := httptest.NewRecorder()
 
 	h.GetMe(w, req)
@@ -256,15 +255,15 @@ func TestAuthHandler_GetMe_NotFound(t *testing.T) {
 
 	jwtService := createTestJWTService()
 
-	h := NewAuthHandler(authUC, userUC, jwtService)
+	h := NewAuthHandler(authUC, userUC, jwtService, apiMiddleware.NewAuthMiddleware(jwtService))
 
 	req := httptest.NewRequest(http.MethodGet, "/me", nil)
-	
+
 	// Add mock claims to context
 	claims := &jwt.Claims{UserID: uuid.Must(uuid.NewV4()).String()}
 	ctx := context.WithValue(req.Context(), apiMiddleware.UserContextKey, claims)
 	req = req.WithContext(ctx)
-	
+
 	w := httptest.NewRecorder()
 
 	h.GetMe(w, req)

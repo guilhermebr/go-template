@@ -46,7 +46,7 @@ func (h *AuthHandler) Routes() chi.Router {
 
 	r.Post("/register", h.Register)
 	r.Post("/login", h.Login)
-	
+
 	// Protected routes
 	r.Group(func(r chi.Router) {
 		r.Use(h.authMiddleware.RequireAuth)

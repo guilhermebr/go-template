@@ -1,10 +1,9 @@
 package templates
 
 import "go-template/domain/entities"
-import "go-template/internal/types"
 import "fmt"
 
-templ Users(user *entities.User, usersData *types.UserListResponse) {
+templ Users(user *entities.User, usersData *entities.UserListResponse) {
 	@Layout("User Management", user) {
 		<!-- Page header -->
 		<div class="bg-white shadow rounded-lg px-6 py-4 mb-6">
@@ -429,7 +428,7 @@ templ Users(user *entities.User, usersData *types.UserListResponse) {
 	}
 }
 
-templ UsersTable(usersData *types.UserListResponse, currentUser *entities.User) {
+templ UsersTable(usersData *entities.UserListResponse, currentUser *entities.User) {
 	<div class="bg-white shadow overflow-hidden sm:rounded-lg">
 		if usersData == nil || len(usersData.Users) == 0 {
 			<div class="text-center py-12">

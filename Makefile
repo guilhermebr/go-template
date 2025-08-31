@@ -140,7 +140,7 @@ openapi-generate:
 	@${GO_BIN_PATH}/swag init -g cmd/service/main.go -o docs/ --parseDependency --parseInternal
 	@mv docs/swagger.yaml docs/openapi-generated.yaml
 	@mv docs/swagger.json docs/openapi-generated.json
-	@cp docs/openapi-generated.* app/web/docs/
+	@echo "==> Specs generated at docs/openapi-generated.{yaml,json}"
 
 # Generate OpenAPI documentation
 .PHONY: docs

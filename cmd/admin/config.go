@@ -10,18 +10,19 @@ import (
 
 type Config struct {
 	Environment string `conf:"env:ENVIRONMENT,default:development"`
-	Address     string `conf:"env:ADDRESS,default:0.0.0.0:8080"`
+	Address     string `conf:"env:ADDRESS,default:0.0.0.0:8081"`
 
 	// API service configuration
 	ApiBaseURL string `conf:"env:API_BASE_URL,default:http://localhost:3000"`
 
 	// Session configuration
-	SessionSecret string `conf:"env:SESSION_SECRET,required"`
-	SessionMaxAge int    `conf:"env:SESSION_MAX_AGE,default:86400"` // 24 hours
+	CookieMaxAge   int    `conf:"env:COOKIE_MAX_AGE,default:86400"` // 24 hours
+	CookieDomain   string `conf:"env:COOKIE_DOMAIN,default:localhost"`
+	CookieSecure   bool   `conf:"env:COOKIE_SECURE,default:false"`
+	SessionTimeout int    `conf:"env:SESSION_TIMEOUT,default:86400"` // 24 hours
 
 	// Static files
-	StaticPath  string `conf:"env:STATIC_PATH,default:web/static"`
-	TemplateDir string `conf:"env:TEMPLATE_DIR,default:app/admin/templates"`
+	StaticPath string `conf:"env:STATIC_PATH,default:web/static"`
 }
 
 func (c *Config) Load(prefix string) error {

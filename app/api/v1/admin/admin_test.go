@@ -354,6 +354,10 @@ func TestDeleteUser_Success(t *testing.T) {
 
 	uID := uuid.Must(uuid.NewV4())
 	req := httptest.NewRequest(http.MethodDelete, "/users/"+uID.String(), nil)
+	// add admin context claims (different from target user) to authorize deletion
+	adminID := uuid.Must(uuid.NewV4())
+	ctx := context.WithValue(req.Context(), apiMiddleware.UserContextKey, &jwt.Claims{UserID: adminID.String(), Email: "admin@x.com", AccountType: entities.AccountTypeSuperAdmin.String()})
+	req = req.WithContext(ctx)
 	w := httptest.NewRecorder()
 
 	rctx := chi.NewRouteContext()

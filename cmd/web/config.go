@@ -20,6 +20,7 @@ type Config struct {
 	CookieSecure   bool   `conf:"env:COOKIE_SECURE,default:false"`     // Set to true in production with HTTPS
 	CookieDomain   string `conf:"env:COOKIE_DOMAIN,default:localhost"` // Set to your domain in production
 	SessionTimeout int    `conf:"env:SESSION_TIMEOUT,default:1440"`    // Session timeout in minutes (24 hours)
+	StaticPath     string `conf:"env:STATIC_PATH,default:web/static"`
 }
 
 func (c *Config) Load(prefix string) error {

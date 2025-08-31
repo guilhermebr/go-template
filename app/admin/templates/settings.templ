@@ -2,9 +2,8 @@ package templates
 
 import "fmt"
 import "go-template/domain/entities"
-import "go-template/internal/types"
 
-templ Settings(user *entities.User, settings *types.SystemSettings) {
+templ Settings(user *entities.User, settings *entities.SystemSettings) {
 	@Layout("System Settings", user) {
 		<!-- Page header -->
 		<div class="mb-8">

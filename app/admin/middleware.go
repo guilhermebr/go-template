@@ -1,10 +1,12 @@
-package web
+package admin
 
 import (
 	"context"
 	"go-template/domain/entities"
 	gweb "go-template/gateways/web"
 	"net/http"
+
+	"github.com/gofrs/uuid/v5"
 )
 
 type contextKey string
@@ -23,9 +25,9 @@ type AuthMiddleware struct {
 func NewAuthMiddleware(client *gweb.Client, cookieSecure bool, cookieDomain string, cookieMaxAge int) *AuthMiddleware {
 	return &AuthMiddleware{
 		client:       client,
+		cookieMaxAge: cookieMaxAge,
 		cookieSecure: cookieSecure,
 		cookieDomain: cookieDomain,
-		cookieMaxAge: cookieMaxAge,
 	}
 }
 
@@ -40,17 +42,25 @@ func (m *AuthMiddleware) RequireAuth(next http.Handler) http.Handler {
 
 		// Set token in client and validate
 		m.client.SetAuthToken(token)
-		user, err := m.client.GetCurrentUser()
-		if err != nil {
-			// Clear invalid token cookies
+		if err := m.client.VerifyToken(); err != nil {
 			m.clearAuthCookies(w)
-
 			http.Redirect(w, r, "/login?error=session_expired&redirect="+r.URL.Path, http.StatusFound)
 			return
 		}
 
+		// Build user context from cookies (minimal fields)
+		var user entities.User
+		if idStr := getCookieValue(r, CookieUserID); idStr != "" {
+			if id, err := uuid.FromString(idStr); err == nil {
+				user.ID = id
+			}
+		}
+
+		user.Email = getCookieValue(r, CookieUserEmail)
+		user.AccountType = entities.AccountType(getCookieValue(r, CookieAccountType))
+
 		// Add user to context
-		ctx := context.WithValue(r.Context(), userContextKey, user)
+		ctx := context.WithValue(r.Context(), userContextKey, &user)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -60,17 +70,47 @@ func (m *AuthMiddleware) OptionalAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token := getCookieValue(r, CookieToken)
 		if token != "" {
-			// Set token in client and try to get user
+			// Set token in client and try to verify
 			m.client.SetAuthToken(token)
-			user, err := m.client.GetCurrentUser()
-			if err == nil && user != nil {
-				// Add user to context if valid
-				ctx := context.WithValue(r.Context(), userContextKey, user)
+			if err := m.client.VerifyToken(); err == nil {
+				var user entities.User
+				if idStr := getCookieValue(r, CookieUserID); idStr != "" {
+					if id, err := uuid.FromString(idStr); err == nil {
+						user.ID = id
+					}
+				}
+				user.Email = getCookieValue(r, CookieUserEmail)
+				user.AccountType = entities.AccountType(getCookieValue(r, CookieAccountType))
+				ctx := context.WithValue(r.Context(), userContextKey, &user)
 				r = r.WithContext(ctx)
 			} else {
 				// Clear invalid token cookies
 				m.clearAuthCookies(w)
 			}
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+// RequireSuperAdmin middleware ensures only super admin users can access the route
+func (m *AuthMiddleware) RequireSuperAdmin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user := GetUserFromContext(r)
+		if user == nil {
+			http.Redirect(w, r, "/login", http.StatusFound)
+			return
+		}
+
+		if user.AccountType != entities.AccountTypeSuperAdmin {
+			// For HTMX requests, return error
+			if r.Header.Get("HX-Request") == "true" {
+				http.Error(w, "Access denied: super admin privileges required", http.StatusForbidden)
+				return
+			}
+			// For regular requests, redirect to dashboard
+			http.Redirect(w, r, "/dashboard?error=access_denied", http.StatusFound)
+			return
 		}
 
 		next.ServeHTTP(w, r)

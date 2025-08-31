@@ -1,10 +1,9 @@
 package templates
 
 import "go-template/domain/entities"
-import "go-template/internal/types"
 import "fmt"
 
-templ Dashboard(user *entities.User, stats *types.DashboardStats) {
+templ Dashboard(user *entities.User, stats *entities.DashboardStats) {
 	@Layout("Dashboard", user) {
 		<!-- Page header -->
 		<div class="mb-8">
@@ -194,7 +193,7 @@ templ Dashboard(user *entities.User, stats *types.DashboardStats) {
 	}
 }
 
-templ StatsCards(stats *types.DashboardStats) {
+templ StatsCards(stats *entities.DashboardStats) {
 	<div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
 		<!-- Total Users -->
 		<div class="bg-white overflow-hidden shadow rounded-lg">

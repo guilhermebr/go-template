@@ -6,12 +6,16 @@ info:
   contact:
     name: API Support
     url: https://github.com/guilhermebr/go-template
+    email: support@example.com
+  termsOfService: http://swagger.io/terms/
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
 
 servers:
   - url: http://localhost:3000
-    description: Development server
-  - url: https://api.example.com
-    description: Production server
+    description: Development server (HTTP)
+
 
 paths:
   /api/v1/auth/register:
@@ -49,6 +53,173 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '500':
           description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/v1/login:
+    post:
+      tags:
+        - admin
+      summary: Admin login
+      description: Authenticate admin user with privilege validation
+      requestBody:
+        description: Admin login request
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminLoginRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminLoginResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/v1/dashboard/stats:
+    get:
+      tags:
+        - admin
+      summary: Get dashboard statistics
+      description: Retrieve admin dashboard statistics including user counts and system alerts
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardStatsResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/v1/users:
+    get:
+      tags:
+        - admin
+      summary: List users
+      description: Retrieve a paginated list of users with optional search and filtering
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          description: 'Page number (default: 1)'
+          schema:
+            type: integer
+        - in: query
+          name: page_size
+          description: 'Page size (default: 20, max: 100)'
+          schema:
+            type: integer
+        - in: query
+          name: search
+          description: Search term for email
+          schema:
+            type: string
+        - in: query
+          name: account_type
+          description: Filter by account type
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserListResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags:
+        - admin
+      summary: Create a new user
+      description: Create a new user account with specified account type
+      security:
+        - BearerAuth: []
+      requestBody:
+        description: User creation request
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal Server Error
           content:
             application/json:
               schema:
@@ -234,6 +405,37 @@ components:
       bearerFormat: JWT
 
   schemas:
+    AdminLoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          description: Admin email address
+          example: admin@example.com
+        password:
+          type: string
+          description: Admin password
+          example: password123
+
+    AdminLoginResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          description: JWT authentication token
+        expires_at:
+          type: string
+          format: date-time
+          description: Token expiration timestamp
+        account_type:
+          $ref: '#/components/schemas/AccountType'
+        user:
+          $ref: '#/components/schemas/User'
+
     RegisterRequest:
       type: object
       required:
@@ -374,3 +576,52 @@ components:
           type: string
           description: Error message
           example: Something went wrong
+
+    DashboardStatsResponse:
+      type: object
+      properties:
+        total_users:
+          type: integer
+        admin_users:
+          type: integer
+        active_sessions:
+          type: integer
+        system_alerts:
+          type: integer
+
+    UserListResponse:
+      type: object
+      properties:
+        users:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+        page:
+          type: integer
+        page_size:
+          type: integer
+        total:
+          type: integer
+        total_pages:
+          type: integer
+
+    CreateUserRequest:
+      type: object
+      required:
+        - email
+        - password
+        - auth_provider
+        - account_type
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        auth_provider:
+          type: string
+          description: Authentication provider used
+          example: supabase
+        account_type:
+          $ref: '#/components/schemas/AccountType'

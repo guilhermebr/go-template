@@ -12,6 +12,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/render"
 )
 
 type ApiHandlers struct {
@@ -45,5 +46,11 @@ func (h *ApiHandlers) Routes(r chi.Router) {
 }
 
 func (h *ApiHandlers) Health(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
+	response := map[string]string{
+		"status":  "ok",
+		"service": "go-template-api",
+	}
+
+	render.Status(r, http.StatusOK)
+	render.JSON(w, r, response)
 }

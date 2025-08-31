@@ -88,6 +88,8 @@ github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 h1:El6M4kTTCOh6aBiKaU
 github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510/go.mod h1:pupxD2MaaD3pAXIBCelhxNneeOaAeabZDe5s4K6zSpQ=
 github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
 github.com/google/uuid v1.6.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
+github.com/guilhermebr/gox/http v0.0.0-20250831200526-f70ee6f867e6 h1:S7325Ty6+wRP5TgDDMnTWvYk+a18TqUqs+B4/f51O2A=
+github.com/guilhermebr/gox/http v0.0.0-20250831200526-f70ee6f867e6/go.mod h1:Sa7XQhjtwrTCwngzaeJ39eMLCnz0qq6eZK1HmGfwvho=
 github.com/guilhermebr/gox/logger v0.0.0-20250531115130-f761d05ebb90 h1:+2o2rNat4YsaHYXsUmpPx+D37WLobFPI8rB7+Pvpmgo=
 github.com/guilhermebr/gox/logger v0.0.0-20250531115130-f761d05ebb90/go.mod h1:R+FKr34zkASJFlL0OhGrlUFemgw7VV2WiidykflJw7I=
 github.com/guilhermebr/gox/postgres v0.0.0-20250531115130-f761d05ebb90 h1:tMTkUc+JLb5eV0TaicFR1GY/aPRfIrWDyZJpfhiCu14=

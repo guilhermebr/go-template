@@ -1,18 +1,44 @@
 package admin
 
 import (
-	"context"
+	gweb "go-template/gateways/web"
+	"log/slog"
 	"net/http"
-	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
-
-	"go-template/app/admin/templates"
 )
 
-func NewRouter(handlers *Handlers, staticPath string) *chi.Mux {
+type Config struct {
+	APIBaseURL     string
+	CookieMaxAge   int
+	CookieSecure   bool
+	CookieDomain   string
+	SessionTimeout int
+	StaticPath     string
+}
+
+type AdminApp struct {
+	handlers *Handlers
+	auth     *AuthMiddleware
+	logger   *slog.Logger
+}
+
+func New(cfg Config, log *slog.Logger) *AdminApp {
+	client := gweb.NewClient(cfg.APIBaseURL)
+	auth := NewAuthMiddleware(client, cfg.CookieSecure, cfg.CookieDomain, cfg.CookieMaxAge)
+	handlers := NewHandlers(client, auth, log, cfg.StaticPath)
+
+	return &AdminApp{
+		handlers: handlers,
+		auth:     auth,
+		logger:   log,
+	}
+}
+
+func (app *AdminApp) Routes() chi.Router {
 	r := chi.NewRouter()
 
 	// Middleware
@@ -22,128 +48,60 @@ func NewRouter(handlers *Handlers, staticPath string) *chi.Mux {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Compress(5))
+	r.Use(middleware.Timeout(60 * time.Second))
 
 	// CORS configuration
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"*"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"*"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		ExposedHeaders:   []string{"Link"},
 		AllowCredentials: true,
 		MaxAge:           300,
 	}))
 
 	// Static files
-	fileServer := http.FileServer(http.Dir(staticPath))
-	r.Handle("/static/*", http.StripPrefix("/static/", fileServer))
+	r.Handle("/static/*", http.StripPrefix("/static/", app.handlers.fileServer))
 
 	// Public routes (no auth required)
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/login", http.StatusFound)
 	})
-	r.Get("/login", handlers.LoginPage)
-	r.Post("/login", handlers.LoginSubmit)
+	r.Get("/login", app.handlers.LoginPage)
+	r.Post("/login", app.handlers.LoginSubmit)
 
 	// Protected routes (auth required)
 	r.Group(func(r chi.Router) {
-		r.Use(handlers.RequireAuth)
+		r.Use(app.auth.RequireAuth)
 
-		r.Get("/dashboard", handlers.Dashboard)
-		r.Post("/logout", handlers.Logout)
+		r.Get("/dashboard", app.handlers.Dashboard)
+		r.Post("/logout", app.handlers.Logout)
 
 		// User management (all admins - validation handled in handlers)
-		r.Get("/users", handlers.UsersPage)
-		r.Get("/users/{id}", handlers.UserDetail)
-		r.Post("/users/update", handlers.UpdateUser)
-		r.Post("/users/create", handlers.CreateUser)
-		r.Post("/users/delete", handlers.DeleteUser)
+		r.Get("/users", app.handlers.UsersPage)
+		r.Get("/users/{id}", app.handlers.UserDetail)
+		r.Post("/users/update", app.handlers.UpdateUser)
+		r.Post("/users/create", app.handlers.CreateUser)
+		r.Post("/users/delete", app.handlers.DeleteUser)
 
 		// Settings (super admin only)
 		r.Group(func(r chi.Router) {
-			r.Get("/settings", handlers.SettingsPage)
-			r.Get("/settings/auth-providers", handlers.GetAuthProviders)
+			r.Get("/settings", app.handlers.SettingsPage)
+			r.Get("/settings/auth-providers", app.handlers.GetAuthProviders)
 		})
 
 		r.Group(func(r chi.Router) {
-			r.Use(handlers.RequireSuperAdmin)
-			r.Post("/settings", handlers.UpdateSettings)
+			r.Use(app.auth.RequireSuperAdmin)
+			r.Post("/settings", app.handlers.UpdateSettings)
 		})
 
 		// HTMX/API endpoints for dynamic updates
 		r.Route("/api", func(r chi.Router) {
-			r.Get("/stats", handlers.GetStatsAPI)
-			r.Get("/users", handlers.GetUsersAPI)
-			r.Post("/users/{id}/toggle", handlers.ToggleUserAPI)
+			r.Get("/stats", app.handlers.GetStatsAPI)
+			r.Get("/users", app.handlers.GetUsersAPI)
+			r.Post("/users/{id}/toggle", app.handlers.ToggleUserAPI)
 		})
 	})
 
 	return r
-}
-
-// Additional API endpoints for HTMX responses
-func (h *Handlers) GetStatsAPI(w http.ResponseWriter, r *http.Request) {
-	stats, err := h.client.GetDashboardStats()
-	if err != nil {
-		http.Error(w, "Failed to get stats", http.StatusInternalServerError)
-		return
-	}
-
-	// Return stats as HTML fragment using templ component
-	w.Header().Set("Content-Type", "text/html")
-	_ = templates.StatsCards(stats).Render(context.Background(), w)
-}
-
-func (h *Handlers) GetUsersAPI(w http.ResponseWriter, r *http.Request) {
-	user := h.getUserFromContext(r)
-	if user == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-	page := 1
-	pageSize := 20
-	if v := r.URL.Query().Get("page"); v != "" {
-		if p, err := strconv.Atoi(v); err == nil && p > 0 {
-			page = p
-		}
-	}
-	if v := r.URL.Query().Get("limit"); v != "" {
-		if ps, err := strconv.Atoi(v); err == nil && ps > 0 && ps <= 100 {
-			pageSize = ps
-		}
-	} else if v := r.URL.Query().Get("page_size"); v != "" {
-		if ps, err := strconv.Atoi(v); err == nil && ps > 0 && ps <= 100 {
-			pageSize = ps
-		}
-	}
-
-	// Get search and filter parameters
-	search := r.URL.Query().Get("search")
-	accountType := r.URL.Query().Get("account_type")
-
-	users, err := h.client.ListUsersWithFilter(page, pageSize, search, accountType)
-	if err != nil {
-		http.Error(w, "Failed to get users", http.StatusInternalServerError)
-		return
-	}
-
-	// Check if this is a request for recent users (dashboard)
-	if r.URL.Query().Get("limit") == "5" {
-		w.Header().Set("Content-Type", "text/html")
-		_ = templates.RecentUsers(users.Users).Render(context.Background(), w)
-		return
-	}
-
-	// Return users table as HTML fragment using templ component
-	w.Header().Set("Content-Type", "text/html")
-	_ = templates.UsersTable(users, user).Render(context.Background(), w)
-}
-
-func (h *Handlers) ToggleUserAPI(w http.ResponseWriter, r *http.Request) {
-	_ = chi.URLParam(r, "id") // userID for future implementation
-
-	// This is a placeholder for user status toggle functionality
-	// You would implement the actual toggle logic here
-
-	w.Header().Set("Content-Type", "text/html")
-	w.Write([]byte(`<span class="text-green-600">Active</span>`))
 }

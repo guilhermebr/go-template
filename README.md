@@ -1,300 +1,199 @@
-# Go Template
+## Go Template
 
-A modern, production-ready Golang project template featuring clean architecture, database migrations, testing utilities, and development tooling.
+Production-ready Go template with Domain-Driven Design (DDD), PostgreSQL, code generation, OpenAPI, and three runnable apps: API, Web, and Admin.
 
-## Features
+### Highlights
 
-- 🏗️ **Clean Architecture**: Well-organized project structure with domain-driven design
-- 🗃️ **Database Support**: PostgreSQL integration with migrations and connection pooling
-- 🛠️ **Code Generation**: SQLC for type-safe SQL queries
-- 🧪 **Testing**: Comprehensive testing setup with Docker integration
-- 🔍 **Quality Tools**: Linting, security scanning, and code coverage
-- 🐳 **Docker**: Optimized multi-stage builds with security best practices
-- ⚙️ **Configuration**: Environment-based configuration management
-- 📦 **Multiple Binaries**: Service, CLI, and Worker applications
+- Clean DDD architecture (apps, domain, gateways, internal)
+- PostgreSQL with migrations (golang-migrate) and type-safe queries (sqlc)
+- OpenAPI docs and client SDK generation
+- Web UI rendered with `templ`
+- Solid DX: Makefile tasks, lint, tests, security checks
 
-## Project Structure
+## Architecture
+
+This repo follows DDD. Key folders:
 
 ```
-├── cmd/                    # Application entry points
-│   ├── service/           # Main API service
-│   ├── cli/               # Command-line interface
-│   └── worker/            # Background worker
-├── internal/              # Private application code
-│   ├── api/               # HTTP handlers and routing
-│   ├── config/            # Configuration management
-│   └── repository/        # Data access layer
-├── domain/                # Business logic and entities
-│   ├── entities/          # Domain models
-│   ├── example/           # Example implementations
-│   └── errors.go          # Domain errors
-├── build/                 # Compiled binaries
-├── docker-compose.yaml    # Development environment
-├── Makefile              # Development commands
-├── sqlc.yaml             # SQLC configuration
-└── change_repo.sh        # Repository name change script
+cmd/            # Entrypoints and config for each app
+  service/      # API server (REST)
+  web/          # Web app (user-facing)
+  admin/        # Admin app
+
+app/            # Application layer (HTTP, routing, views)
+  api/          # API routers, middleware, handlers
+  web/          # Web routes, pages (templ)
+  admin/        # Admin routes, pages (templ)
+
+domain/         # Business logic (entities + use cases)
+  entities/     # Core types shared across the domain
+  user/, auth/, example/, settings/ # Use cases and interfaces
+
+gateways/       # Adapters to 3rd-party systems
+  repository/pg # PostgreSQL repositories (sqlc)
+  auth/         # External auth providers
+
+internal/       # Shared internal libs (e.g. jwt)
+
+build/          # Compiled binaries
+docs/           # Manual and generated OpenAPI docs
 ```
+
+Concepts:
+- Apps depend on use cases in `domain/` and on adapters in `gateways/`.
+- Entities in `domain/entities` are provider-agnostic.
+- Swap providers by changing only `gateways/`.
+
+## Services
+
+- API (cmd/service): REST API on `API_ADDRESS` (default 0.0.0.0:3000)
+- Web (cmd/web): user-facing app on `WEB_ADDRESS` (default 0.0.0.0:8080)
+- Admin (cmd/admin): admin console on `ADMIN_ADDRESS` (default 0.0.0.0:8081)
 
 ## Quick Start
 
-### 1. Use This Template
-
-Click "Use this template" on GitHub or clone the repository:
+1) Create your repo
 
 ```bash
-git clone https://github.com/guilhermebr/go-template.git your-project-name
-cd your-project-name
+git clone https://github.com/guilhermebr/go-template.git your-project
+cd your-project
+./change_repo.sh your-module-name # updates go.mod and imports
 ```
 
-### 2. Change Repository Name
-
-Run the provided script to update all references to the new repository name:
-
-```bash
-./change_repo.sh your-new-repo-name
-```
-
-This script will:
-- Update the module name in `go.mod`
-- Replace all import paths throughout the codebase
-- Update any references in configuration files
-
-### 3. Install Dependencies
-
-Set up the development environment:
+2) Tooling
 
 ```bash
 make setup
 ```
 
-This will install all required tools:
-- `golangci-lint` - Linting
-- `migrate` - Database migrations
-- `sqlc` - SQL code generation
-- `gotestfmt` - Test output formatting
-- `gosec` - Security analysis
-- `moq` - Mock generation
-
-### 4. Start Development Environment
-
-Start the PostgreSQL database:
+3) Configure env
 
 ```bash
-docker-compose up -d db
+cp .env.example .env
 ```
 
-Run database migrations:
+Minimum required variables (examples):
+- DATABASE_HOST=localhost
+- DATABASE_USER=postgres
+- DATABASE_PASSWORD=postgres
+- DATABASE_NAME=app
+- API_ADDRESS=0.0.0.0:3000
+- AUTH_SECRET_KEY=dev-secret-change-me
+- AUTH_PROVIDER=supabase
+- SUPABASE_URL=... (when using supabase)
+- SUPABASE_API_KEY=...
+- WEB_ADDRESS=0.0.0.0:8080 (prefix vars with WEB_ for Web app)
+- ADMIN_ADDRESS=0.0.0.0:8081 (prefix vars with ADMIN_ for Admin app)
+
+4) Database
 
 ```bash
+docker compose up -d db
+export DATABASE_HOST=localhost \
+       DATABASE_USER=postgres \
+       DATABASE_PASSWORD=postgres \
+       DATABASE_NAME=app
 make migration/up
 ```
 
-### 5. Build and Run
-
-Compile the service:
+5) Generate code and build
 
 ```bash
-make compile
+make generate   # templ + sqlc + go generate
+make build      # builds service, web, admin into ./build
 ```
 
-Run the service:
+6) Run apps
 
 ```bash
-./build/service
+./build/service   # API
+./build/web       # Web
+./build/admin     # Admin
+```
+
+## Environment Variables
+
+Service (no prefix):
+- ENVIRONMENT=development
+- API_ADDRESS=0.0.0.0:3000
+- DATABASE_ENGINE=postgres
+- DATABASE_HOST, DATABASE_USER, DATABASE_PASSWORD, DATABASE_NAME
+- AUTH_SECRET_KEY, AUTH_TOKEN_TTL=24h
+- AUTH_PROVIDER=supabase
+- SUPABASE_URL, SUPABASE_API_KEY
+
+Web (prefix: WEB_):
+- WEB_ENVIRONMENT, WEB_ADDRESS=0.0.0.0:8080
+- WEB_API_BASE_URL=http://localhost:3000
+- WEB_COOKIE_MAX_AGE, WEB_COOKIE_SECURE, WEB_COOKIE_DOMAIN, WEB_SESSION_TIMEOUT
+
+Admin (prefix: ADMIN_):
+- ADMIN_ENVIRONMENT, ADMIN_ADDRESS=0.0.0.0:8081
+- ADMIN_API_BASE_URL=http://localhost:3000
+- ADMIN_COOKIE_MAX_AGE, ADMIN_COOKIE_SECURE, ADMIN_COOKIE_DOMAIN, ADMIN_SESSION_TIMEOUT
+
+## OpenAPI & SDKs
+
+- Manual spec: `docs/openapi.yaml`
+- Generated spec from code annotations: `make openapi-generate` → `docs/openapi-generated.{yaml,json}`
+- View docs locally:
+
+```bash
+make docs
+# Open docs/redoc.html or docs/swagger-ui.html in the browser
+```
+
+Generate client SDKs (from manual spec):
+
+```bash
+make sdks           # all (Go, TS, Python, Java)
+make sdk-go
+make sdk-typescript
+make sdk-python
+make sdk-java
+```
+
+From generated spec:
+
+```bash
+make sdks-generated
+```
+
+## Migrations
+
+Create a migration:
+
+```bash
+make migration/create
+# enter migration name when prompted
+```
+
+Apply/rollback:
+
+```bash
+make migration/up
+make migration/down
 ```
 
 ## Development
 
-### Environment Configuration
-
-Copy and modify the environment file:
+Testing and quality:
 
 ```bash
-cp .env-dev .env
+make test        # unit tests (short)
+make test-full   # all tests with coverage
+make coverage    # HTML coverage report
+make lint        # golangci-lint
+make gosec       # security scan
 ```
 
-Key configuration options:
-- `DATABASE_*`: PostgreSQL connection settings
-- `API_ADDRESS`: Service bind address (default: `0.0.0.0:3000`)
-- `ENVIRONMENT`: Runtime environment (`development`/`production`)
+## Notes
 
-### Available Make Commands
-
-#### Setup & Installation
-- `make setup` - Install all development tools
-- `make install-*` - Install specific tools
-
-#### Code Generation
-- `make generate` - Generate all code (SQLC, mocks, etc.)
-- `make sqlc-generate` - Generate SQLC code only
-
-#### Building
-- `make compile` - Build the service binary
-
-#### Testing
-- `make test` - Run tests (short mode)
-- `make test-full` - Run all tests including integration tests
-- `make coverage` - Generate test coverage report
-
-#### Quality Assurance
-- `make lint` - Run linters
-- `make gosec` - Run security analysis
-
-#### Database Migrations
-- `make migration/create` - Create new migration files
-- `make migration/up` - Apply all pending migrations
-- `make migration/down` - Rollback all migrations
-
-### Database Migrations
-
-Create a new migration:
-
-```bash
-make migration/create
-# Enter migration name when prompted
-```
-
-Apply migrations:
-
-```bash
-# Set environment variables first
-export DATABASE_HOST=localhost
-export DATABASE_USER=postgres
-export DATABASE_PASSWORD=postgres
-export DATABASE_NAME=app
-
-make migration/up
-```
-
-### Code Generation
-
-This template uses SQLC for type-safe database queries. After modifying SQL files:
-
-```bash
-make generate
-```
-
-## Testing
-
-### Unit Tests
-
-Run quick tests:
-
-```bash
-make test
-```
-
-### Integration Tests
-
-Run full test suite including integration tests:
-
-```bash
-make test-full
-```
-
-### Test Coverage
-
-Generate coverage report:
-
-```bash
-make coverage
-```
-
-## Dependencies
-
-This template includes several carefully selected dependencies:
-
-### Core Dependencies
-- **Chi Router** (`github.com/go-chi/chi/v5`) - HTTP router
-- **pgx** (`github.com/jackc/pgx/v5`) - PostgreSQL driver
-- **migrate** (`github.com/golang-migrate/migrate/v4`) - Database migrations
-- **conf** (`github.com/ardanlabs/conf/v3`) - Configuration management
-- **uuid** (`github.com/gofrs/uuid/v5`) - UUID generation
-
-### Development & Testing
-- **testify** (`github.com/stretchr/testify`) - Testing toolkit
-- **dockertest** (`github.com/ory/dockertest/v3`) - Docker integration testing
-- **godotenv** (`github.com/joho/godotenv`) - Environment file loading
-
-## Docker
-
-This template includes optimized Docker configurations for both development and production use.
-
-### Docker Files
-
-- **`Dockerfile`**: Standard production build with Alpine Linux base
-- **`Dockerfile.prod`**: Ultra-secure production build using Google's distroless image
-- **`Dockerfile.migrations`**: Separate container for running database migrations
-
-### Building Docker Images
-
-#### Standard Production Build
-```bash
-# Build the image
-docker build -t go-template:latest .
-
-# Run the container
-docker run -p 3000:3000 \
-  -e DATABASE_HOST=your-db-host \
-  -e DATABASE_USER=your-db-user \
-  -e DATABASE_PASSWORD=your-db-password \
-  -e DATABASE_NAME=your-db-name \
-  go-template:latest
-```
-
-#### Ultra-Secure Production Build
-```bash
-# Build with distroless base (smallest, most secure)
-docker build -f Dockerfile.prod -t go-template:prod .
-
-# Run the container
-docker run -p 3000:3000 \
-  -e DATABASE_HOST=your-db-host \
-  -e DATABASE_USER=your-db-user \
-  -e DATABASE_PASSWORD=your-db-password \
-  -e DATABASE_NAME=your-db-name \
-  go-template:prod
-```
-
-### Docker Compose
-
-#### Development Environment
-```bash
-# Start all services (database + migrations)
-docker-compose up
-
-# Start only the database
-docker-compose up -d db
-
-# Run migrations separately
-docker-compose run migrations
-```
-
-#### Production Deployment
-```bash
-# Create production docker-compose.prod.yaml and run
-docker-compose -f docker-compose.prod.yaml up -d
-```
-
-### Image Optimization Features
-
-The Docker builds include several optimizations:
-
-- **Multi-stage builds**: Separate build and runtime stages for smaller final images
-- **Layer caching**: Go modules are downloaded in a separate layer for better cache utilization
-- **Security**: Non-root user execution and minimal attack surface
-- **Static binaries**: Fully static Go binaries for distroless compatibility
-- **Health checks**: Built-in health monitoring for the standard Dockerfile
-- **Build optimization**: Stripped binaries with `-ldflags="-w -s"` for smaller size
-
-### Image Sizes
-
-Approximate final image sizes:
-- **Dockerfile**: ~20MB (Alpine-based)
-- **Dockerfile.prod**: ~15MB (Distroless-based)
-- **Development**: Full Go toolchain (~800MB)
+- Views are built with `templ`. Run `make generate` after editing `.templ` files.
+- PostgreSQL adapters are in `gateways/repository/pg` and generated by `sqlc`.
+- Apps construct dependencies and wire use cases; business logic stays in `domain/`.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT
 

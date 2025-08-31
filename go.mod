@@ -1,6 +1,6 @@
 module go-template
 
-go 1.24.2
+go 1.24.3
 
 require (
 	github.com/a-h/templ v0.3.943
@@ -13,6 +13,7 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/golang-migrate/migrate/v4 v4.18.3
 	github.com/google/uuid v1.6.0
+	github.com/guilhermebr/gox/http v0.0.0-20250831200526-f70ee6f867e6
 	github.com/guilhermebr/gox/logger v0.0.0-20250531115130-f761d05ebb90
 	github.com/guilhermebr/gox/postgres v0.0.0-20250531115130-f761d05ebb90
 	github.com/jackc/pgx/v5 v5.7.5
@@ -27,6 +28,7 @@ require (
 
 //replace github.com/guilhermebr/gox/postgres v0.0.0 => ../gox/postgres
 //replace github.com/guilhermebr/gox/logger v0.0.0 => ../gox/logger
+//replace github.com/guilhermebr/gox/http v0.0.0 => ../gox/http
 
 require (
 	dario.cat/mergo v1.0.0 // indirect

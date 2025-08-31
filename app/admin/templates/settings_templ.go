@@ -10,9 +10,8 @@ import templruntime "github.com/a-h/templ/runtime"
 
 import "fmt"
 import "go-template/domain/entities"
-import "go-template/internal/types"
 
-func Settings(user *entities.User, settings *types.SystemSettings) templ.Component {
+func Settings(user *entities.User, settings *entities.SystemSettings) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -97,7 +96,7 @@ func Settings(user *entities.User, settings *types.SystemSettings) templ.Compone
 				var templ_7745c5c3_Var3 string
 				templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", settings.SessionTimeout))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `app/admin/templates/settings.templ`, Line: 163, Col: 66}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `app/admin/templates/settings.templ`, Line: 162, Col: 66}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 				if templ_7745c5c3_Err != nil {
@@ -125,7 +124,7 @@ func Settings(user *entities.User, settings *types.SystemSettings) templ.Compone
 				var templ_7745c5c3_Var4 string
 				templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", settings.MinPasswordLength))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `app/admin/templates/settings.templ`, Line: 184, Col: 69}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `app/admin/templates/settings.templ`, Line: 183, Col: 69}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 				if templ_7745c5c3_Err != nil {
@@ -183,7 +182,7 @@ func Settings(user *entities.User, settings *types.SystemSettings) templ.Compone
 				var templ_7745c5c3_Var5 string
 				templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", settings.BackupRetentionDays))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `app/admin/templates/settings.templ`, Line: 257, Col: 71}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `app/admin/templates/settings.templ`, Line: 256, Col: 71}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 				if templ_7745c5c3_Err != nil {

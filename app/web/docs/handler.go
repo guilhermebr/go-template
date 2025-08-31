@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"strings"
 
+	rootdocs "go-template/docs"
+
 	"github.com/go-chi/chi/v5"
 )
 
@@ -16,7 +18,7 @@ type Handler struct {
 // NewHandler creates a new documentation handler
 func NewHandler() *Handler {
 	return &Handler{
-		docsFS: DocsFS,
+		docsFS: rootdocs.FS(),
 	}
 }
 

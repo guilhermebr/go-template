@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"time"
 
+	gweb "go-template/gateways/web"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
@@ -19,12 +21,13 @@ type Config struct {
 	CookieSecure   bool
 	CookieDomain   string
 	SessionTimeout int
+	StaticPath     string
 }
 
 // WebApp represents the web application
 type WebApp struct {
 	config   Config
-	client   *Client
+	client   *gweb.Client
 	handlers *Handlers
 	auth     *AuthMiddleware
 	logger   *slog.Logger
@@ -32,9 +35,9 @@ type WebApp struct {
 
 // New creates a new web application instance
 func New(config Config, logger *slog.Logger) *WebApp {
-	client := NewClient(config.APIBaseURL)
-	auth := NewAuthMiddleware(client, config.CookieSecure, config.CookieDomain)
-	handlers := NewHandlers(client, logger, config.CookieMaxAge, config.CookieSecure, config.CookieDomain)
+	client := gweb.NewClient(config.APIBaseURL)
+	auth := NewAuthMiddleware(client, config.CookieSecure, config.CookieDomain, config.CookieMaxAge)
+	handlers := NewHandlers(client, logger, auth, config.StaticPath)
 
 	return &WebApp{
 		config:   config,
@@ -54,6 +57,7 @@ func (app *WebApp) Routes() chi.Router {
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	r.Use(middleware.Compress(5))
 	r.Use(middleware.Timeout(60 * time.Second))
 
 	// CORS configuration
@@ -68,6 +72,8 @@ func (app *WebApp) Routes() chi.Router {
 
 	// Optional auth middleware for all routes (adds user to context if authenticated)
 	r.Use(app.auth.OptionalAuth)
+	// Static files
+	r.Handle("/static/*", http.StripPrefix("/static/", app.handlers.fileServer))
 
 	// Home page
 	r.Get("/", app.handlers.HomePage)
@@ -82,7 +88,7 @@ func (app *WebApp) Routes() chi.Router {
 	// Documentation routes (moved from service API)
 	docsHandler := docs.NewHandler()
 	r.Mount("/docs", docsHandler.Routes())
-	
+
 	// Generated Swagger UI (from code annotations) - now served locally
 	r.Get("/swagger/*", httpSwagger.Handler(
 		httpSwagger.URL("/docs/openapi-generated.json"),
